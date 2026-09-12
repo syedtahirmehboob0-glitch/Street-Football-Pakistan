@@ -110,35 +110,26 @@ jobs:
               s = s.replace(old, new, 1)
           p.write_text(s)
           PY
-          sed -i 's|^export_path=".*"$|export_path="build/Street-Football-Pakistan-debug.apk"|' export_presets.cfg
+          echo "Android export preset:" 
+          grep -nE 'name="Android"|platform="Android"|export_path=|gradle_build/export_format|architectures/arm64-v8a' export_presets.cfg
+          test "$(grep -E '^export_path=' export_presets.cfg | cut -d'"' -f2)" = "build/game.apk"
 
       - name: Godot project validation
         run: godot --headless --editor --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --quit
-
-      - name: Prepare Android Gradle build template
-        shell: bash
-        run: |
-          set -euo pipefail
-          T="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
-          ZIP="$T/android_source.zip"
-          test -f "$ZIP"
-          rm -rf android
-          mkdir -p android/build
-          unzip -q "$ZIP" -d android/build
-          echo "Android template files:"
-          find android/build -maxdepth 2 -type f \( -name build.gradle -o -name build.gradle.kts -o -name settings.gradle -o -name gradlew \) -print
-          test -f android/build/build.gradle || test -f android/build/build.gradle.kts
-          test -x android/build/gradlew
-          echo "Android Gradle build template prepared successfully"
 
       - name: Export debug APK
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$GITHUB_WORKSPACE/build"
-          timeout 15m godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android" "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
-          test -s "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
-          file "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
+          rm -rf build
+          mkdir -p build
+          echo "Exporting to relative path: build/game.apk"
+          timeout 15m godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android" "build/game.apk"
+          test -s "build/game.apk"
+          file "build/game.apk"
+          mv "build/game.apk" "build/Street-Football-Pakistan-debug.apk"
+          test -s "build/Street-Football-Pakistan-debug.apk"
+          file "build/Street-Football-Pakistan-debug.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
