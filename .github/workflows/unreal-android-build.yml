@@ -1,0 +1,86 @@
+name: Unreal Engine Android Build
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'UnrealEngineBuild/**'
+      - '.github/workflows/unreal-android-build.yml'
+
+jobs:
+  build-unreal-android:
+    # WarpBuild provides the Windows VM. The UE 5.8 + Android toolchain is expected
+    # to be supplied through the runner/environment configuration.
+    runs-on: warp-windows-latest-x64-32x
+    timeout-minutes: 240
+    defaults:
+      run:
+        working-directory: UnrealEngineBuild
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Unreal and Android environment
+        shell: pwsh
+        run: |
+          if (-not $env:UE_ROOT) { throw 'UE_ROOT is not configured on the runner.' }
+          $editor = Join-Path $env:UE_ROOT 'Engine/Binaries/Win64/UnrealEditor-Cmd.exe'
+          $runUAT = Join-Path $env:UE_ROOT 'Engine/Build/BatchFiles/RunUAT.bat'
+          if (-not (Test-Path $editor)) { throw "UnrealEditor-Cmd.exe not found at $editor" }
+          if (-not (Test-Path $runUAT)) { throw "RunUAT.bat not found at $runUAT" }
+          & $editor -version
+          if ($LASTEXITCODE -ne 0) { throw 'Unreal Engine version check failed.' }
+          if (-not (Get-Command adb -ErrorAction SilentlyContinue)) { throw 'adb is not available on PATH.' }
+          if (-not (Get-Command apksigner -ErrorAction SilentlyContinue)) { throw 'apksigner is not available on PATH.' }
+          adb version
+          apksigner version
+          if (-not $env:ANDROID_HOME -and -not $env:ANDROID_SDK_ROOT) { throw 'ANDROID_HOME/ANDROID_SDK_ROOT is not configured.' }
+          if (-not $env:JAVA_HOME) { throw 'JAVA_HOME is not configured.' }
+          if (-not $env:NDKROOT) { Write-Host 'NDKROOT is not set; UE Turnkey may provide the configured NDK.' }
+
+      - name: Generate project files
+        shell: pwsh
+        run: |
+          $uproject = Join-Path (Get-Location) 'StreetFootballPakistan.uproject'
+          $editor = Join-Path $env:UE_ROOT 'Engine/Binaries/Win64/UnrealEditor-Cmd.exe'
+          & $editor $uproject -run=GenerateProjectFiles -NoLogTimes
+          if ($LASTEXITCODE -ne 0) { throw 'Unreal project-file generation failed.' }
+
+      - name: Build Android Shipping APK
+        shell: pwsh
+        run: |
+          $uproject = Join-Path (Get-Location) 'StreetFootballPakistan.uproject'
+          $runUAT = Join-Path $env:UE_ROOT 'Engine/Build/BatchFiles/RunUAT.bat'
+          $archive = Join-Path (Get-Location) 'Artifacts'
+          & $runUAT BuildCookRun `
+            -project=$uproject `
+            -noP4 `
+            -build `
+            -cook `
+            -stage `
+            -pak `
+            -prereqs `
+            -package `
+            -archive `
+            -archivedirectory=$archive `
+            -platform=Android `
+            -clientconfig=Shipping `
+            -utf8output
+          if ($LASTEXITCODE -ne 0) { throw 'Unreal Android Shipping build failed.' }
+
+      - name: Locate and verify APK
+        shell: pwsh
+        run: |
+          $apk = Get-ChildItem -Path Artifacts -Recurse -Filter '*.apk' | Select-Object -First 1
+          if (-not $apk) { throw 'No APK was produced.' }
+          & (Get-Command apksigner).Source verify --verbose --print-certs $apk.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed.' }
+          Get-FileHash $apk.FullName -Algorithm SHA256 | Format-List
+          "Verified APK: $($apk.FullName)"
+
+      - name: Upload verified APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StreetFootballPakistan-Unreal-Android
+          path: UnrealEngineBuild/Artifacts/**/*.apk
+          if-no-files-found: error
