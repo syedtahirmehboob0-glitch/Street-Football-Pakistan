@@ -10,6 +10,8 @@ env:
   GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-cache
   GRADLE_OPTS: -Dorg.gradle.daemon=true -Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dorg.gradle.configuration-cache=true
 
+auto_cancel: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,6 +30,7 @@ jobs:
             ~/.gradle/wrapper
             .gradle-cache
             ~/.cache/android
+            android
           key: android-godot-${{ env.GODOT_VERSION }}-${{ runner.os }}-${{ hashFiles('project.godot', 'export_presets.cfg', '.github/workflows/build-test-apk.yml') }}
           restore-keys: |
             android-godot-${{ env.GODOT_VERSION }}-${{ runner.os }}-
@@ -101,14 +104,18 @@ jobs:
       - name: Godot project validation
         run: godot --headless --editor --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --quit
 
-      - name: Install Godot Android Gradle build template
+      - name: Prepare Android Gradle build template
         shell: bash
         run: |
           set -e
-          if [ ! -d android ]; then
-            godot --headless --editor --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --install-android-build-template
+          if [ -f android/build.gradle ] || [ -f android/build.gradle.kts ]; then
+            echo "Android Gradle project already cached."
+          else
+            T="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+            test -f "$T/android_source.zip"
+            rm -rf android
+            unzip -q "$T/android_source.zip" -d .
           fi
-          test -d android
           test -f android/build.gradle || test -f android/build.gradle.kts
 
       - name: Export debug APK
@@ -116,7 +123,7 @@ jobs:
         run: |
           set -e
           mkdir -p "$GITHUB_WORKSPACE/build"
-          godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android" "build/Street-Football-Pakistan-debug.apk"
+          timeout 15m godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android" "build/Street-Football-Pakistan-debug.apk"
           test -s "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
           file "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
 
