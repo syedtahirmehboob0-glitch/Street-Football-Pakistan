@@ -103,22 +103,26 @@ jobs:
       - name: Godot project validation
         run: godot --headless --editor --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --quit
 
-      - name: Install Android Gradle build template into project
+      - name: Prepare Android Gradle build template
         shell: bash
         run: |
           set -euo pipefail
+          T="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          ZIP="$T/android_source.zip"
+          test -f "$ZIP"
           rm -rf android
-          timeout 3m godot --headless --editor --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --install-android-build-template
-          echo "Installed Android template tree:"
-          find android -maxdepth 3 -type f \( -name build.gradle -o -name build.gradle.kts -o -name settings.gradle -o -name gradlew \) -print
+          mkdir -p android/build
+          unzip -q "$ZIP" -d android/build
+          echo "Android template files:"
+          find android/build -maxdepth 2 -type f \( -name build.gradle -o -name build.gradle.kts -o -name settings.gradle -o -name gradlew \) -print
           test -f android/build/build.gradle || test -f android/build/build.gradle.kts
-          test -f android/build/gradlew
-          echo "Android Gradle build template installed successfully"
+          test -x android/build/gradlew
+          echo "Android Gradle build template prepared successfully"
 
       - name: Export debug APK
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/build"
           timeout 15m godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android" "build/Street-Football-Pakistan-debug.apk"
           test -s "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
