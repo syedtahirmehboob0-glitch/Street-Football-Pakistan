@@ -36,17 +36,31 @@ jobs:
       - name: Install Android SDK packages
         shell: bash
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
+      - name: Configure headless Android export
+        shell: bash
+        run: |
+          set -e
+          JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/godot-editor"
+          cat > "$RUNNER_TEMP/godot-editor/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "/usr/local/lib/android/sdk"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          EOF
+
       - name: Godot project validation
-        run: godot --headless --path . --editor --quit
+        run: godot --headless --editor --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --quit
 
       - name: Export debug APK
         shell: bash
         run: |
           mkdir -p build
-          godot --headless --path . --export-debug "Android" build/Street-Football-Pakistan-debug.apk
+          godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android" build/Street-Football-Pakistan-debug.apk
           test -s build/Street-Football-Pakistan-debug.apk
 
       - name: Upload APK artifact
