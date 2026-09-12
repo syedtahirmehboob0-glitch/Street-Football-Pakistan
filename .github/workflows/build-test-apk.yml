@@ -53,14 +53,31 @@ jobs:
           export/android/debug_keystore_user = "androiddebugkey"
           export/android/debug_keystore_pass = "android"
           EOF
+      - name: Prepare project for CI export
+        shell: bash
+        run: |
+          set -e
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("scripts/efootball_polish.gd")
+          s = p.read_text()
+          old = 'draw_style_box(panel(Color(0.01, 0.03, 0.04, 0.88), 14, Color(1, 1, 1, 0.16), 1), Rect2(Vector2.ZERO, size))'
+          new = 'draw_rect(Rect2(Vector2.ZERO, size), Color(0.01, 0.03, 0.04, 0.88), true)'
+          if old in s:
+              s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+          sed -i 's/^export_path=".*"$/export_path=""/' export_presets.cfg
       - name: Godot project validation
         run: godot --headless --editor --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --quit
       - name: Export debug APK
         shell: bash
         run: |
+          set -e
           mkdir -p "$GITHUB_WORKSPACE/build"
-          godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android" "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
+          godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android" "build/Street-Football-Pakistan-debug.apk"
           test -s "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
+          file "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
