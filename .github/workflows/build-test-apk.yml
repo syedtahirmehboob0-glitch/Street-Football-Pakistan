@@ -110,7 +110,7 @@ jobs:
               s = s.replace(old, new, 1)
           p.write_text(s)
           PY
-          echo "Android export preset:" 
+          echo "Android export preset:"
           grep -nE 'name="Android"|platform="Android"|export_path=|gradle_build/export_format|architectures/arm64-v8a' export_presets.cfg
           test "$(grep -E '^export_path=' export_presets.cfg | cut -d'"' -f2)" = "build/game.apk"
 
@@ -123,8 +123,8 @@ jobs:
           set -euo pipefail
           rm -rf build
           mkdir -p build
-          echo "Exporting to relative path: build/game.apk"
-          timeout 15m godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android" "build/game.apk"
+          echo "Using Android preset export_path=build/game.apk"
+          timeout 15m godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android"
           test -s "build/game.apk"
           file "build/game.apk"
           mv "build/game.apk" "build/Street-Football-Pakistan-debug.apk"
@@ -136,5 +136,3 @@ jobs:
         with:
           name: Street-Football-Pakistan-debug-apk
           path: build/Street-Football-Pakistan-debug.apk
-
-      # Triggered by ChatGPT to produce the installable APK.
