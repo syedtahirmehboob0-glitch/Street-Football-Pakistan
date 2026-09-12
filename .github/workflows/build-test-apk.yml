@@ -10,6 +10,11 @@ env:
   GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-cache
   GRADLE_OPTS: -Dorg.gradle.daemon=true -Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dorg.gradle.configuration-cache=true
 
+env:
+  GODOT_VERSION: 4.4.1
+  GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-cache
+  GRADLE_OPTS: -Dorg.gradle.daemon=true -Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dorg.gradle.configuration-cache=true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -116,21 +121,22 @@ jobs:
       - name: Godot project validation
         run: godot --headless --editor --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --quit
 
-      # Force a fresh Android build after export-path and engine-version fixes.
       - name: Export debug APK
         shell: bash
         run: |
           set -euo pipefail
-          rm -f game.apk
-          rm -rf build
-          echo "Exporting Android APK to project-root game.apk"
-          timeout 15m godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android" "game.apk"
-          test -s "game.apk"
-          file "game.apk"
-          mkdir -p build
-          mv "game.apk" "build/Street-Football-Pakistan-debug.apk"
-          test -s "build/Street-Football-Pakistan-debug.apk"
-          file "build/Street-Football-Pakistan-debug.apk"
+          OUT="$GITHUB_WORKSPACE/game.apk"
+          rm -f "$OUT"
+          rm -rf "$GITHUB_WORKSPACE/build"
+          echo "Exporting Android APK to: $OUT"
+          test "${OUT##*.}" = "apk"
+          timeout 15m godot --headless --path "$GITHUB_WORKSPACE" --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android" "$OUT"
+          test -s "$OUT"
+          file "$OUT"
+          mkdir -p "$GITHUB_WORKSPACE/build"
+          mv "$OUT" "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
+          test -s "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
+          file "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
