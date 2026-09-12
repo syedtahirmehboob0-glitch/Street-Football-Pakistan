@@ -1,5 +1,6 @@
 [application]
 config/name="Street Football: Pakistan 3D"
+config/icon="res://icon.svg"
 run/main_scene="res://Main.tscn"
 config/features=PackedStringArray("4.3")
 
