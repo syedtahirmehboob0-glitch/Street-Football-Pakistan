@@ -9,11 +9,18 @@ window/size/viewport_height=720
 window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
+window/handheld/orientation=1
 
 [rendering]
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 renderer/rendering_method.web="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
 
 [physics]
 common/physics_ticks_per_second=60
+
+[application]
+config/name="Street Football: Pakistan 3D"
+run/main_scene="res://Main.tscn"
+config/features=PackedStringArray("4.3")
