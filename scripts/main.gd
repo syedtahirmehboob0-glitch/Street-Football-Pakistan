@@ -1,12 +1,11 @@
 extends Node3D
 
-const FIELD_X := 22.0
-const FIELD_Z := 12.0
 const MATCH_LENGTH := 180.0
 const PLAYER_SPEED := 6.0
 const SPRINT_SPEED := 8.5
-const BALL_SPEED := 14.0
-const PASS_SPEED := 10.0
+const BALL_SPEED := 15.0
+const PASS_SPEED := 12.0
+const SAVE_PATH := "user://street_football_pakistan.save"
 
 class Player:
 	var pos := Vector3.ZERO
@@ -15,7 +14,6 @@ class Player:
 	var role := 0
 	var pname := "Player"
 	var node: Node3D
-	var active := false
 	var cooldown := 0.0
 
 	func _init(start_pos: Vector3, team_id: int, player_role: int, player_name: String) -> void:
@@ -31,22 +29,37 @@ var controlled: Player
 var ball_pos := Vector3.ZERO
 var ball_velocity := Vector3.ZERO
 var ball_owner: Player = null
+var ball_node: MeshInstance3D
 var score := [0, 0]
 var time_left := MATCH_LENGTH
 var finished := false
 var message := ""
 var message_time := 0.0
+var current_level := 0
+var coins := 500
+var selected_player := 0
+var game_screen := "menu"
 
 var camera: Camera3D
+var world_root: Node3D
 var ui: CanvasLayer
+var screen_root: Control
+var menu_root: Control
+var match_root: Control
+var level_root: Control
+var info_root: Control
 var score_label: Label
 var timer_label: Label
 var message_label: Label
-var ball_node: MeshInstance3D
+var level_label: Label
+var coins_label: Label
+var move_vector := Vector2.ZERO
+var sprint_pressed := false
 
 func _ready() -> void:
+	load_save()
 	create_world()
-	reset_match()
+	show_menu()
 
 func make_material(color: Color, metallic := 0.0, roughness := 0.7) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
@@ -56,289 +69,371 @@ func make_material(color: Color, metallic := 0.0, roughness := 0.7) -> StandardM
 	return mat
 
 func make_box(size: Vector3, color: Color, parent: Node3D, pos: Vector3) -> MeshInstance3D:
-	var mesh_node := MeshInstance3D.new()
+	var item := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
 	mesh.size = size
-	mesh_node.mesh = mesh
-	mesh_node.material_override = make_material(color)
-	mesh_node.position = pos
-	parent.add_child(mesh_node)
-	return mesh_node
+	item.mesh = mesh
+	item.material_override = make_material(color)
+	item.position = pos
+	parent.add_child(item)
+	return item
 
 func create_world() -> void:
+	world_root = Node3D.new()
+	add_child(world_root)
 	var world_env := WorldEnvironment.new()
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color("#102030")
+	env.background_color = Color("#091521")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("#c7d8ff")
-	env.ambient_light_energy = 0.7
+	env.ambient_light_energy = 0.75
 	world_env.environment = env
-	add_child(world_env)
-
+	world_root.add_child(world_env)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55.0, -25.0, 0.0)
-	sun.light_energy = 1.2
+	sun.light_energy = 1.1
 	sun.shadow_enabled = true
-	add_child(sun)
-
+	world_root.add_child(sun)
 	camera = Camera3D.new()
 	camera.position = Vector3(0.0, 19.0, 19.0)
 	camera.rotation_degrees = Vector3(-48.0, 0.0, 0.0)
 	camera.current = true
-	add_child(camera)
-
+	world_root.add_child(camera)
 	create_field()
 	create_stands()
 	create_ui()
 
 func create_field() -> void:
-	make_box(Vector3(48.0, 0.25, 30.0), Color("#142018"), self, Vector3(0.0, -0.3, 0.0))
-	make_box(Vector3(42.0, 0.18, 24.0), Color("#1d7a42"), self, Vector3.ZERO)
-
-	make_box(Vector3(42.0, 0.05, 0.12), Color.WHITE, self, Vector3(0.0, 0.1, -12.0))
-	make_box(Vector3(42.0, 0.05, 0.12), Color.WHITE, self, Vector3(0.0, 0.1, 12.0))
-	make_box(Vector3(0.12, 0.05, 24.0), Color.WHITE, self, Vector3(-21.0, 0.1, 0.0))
-	make_box(Vector3(0.12, 0.05, 24.0), Color.WHITE, self, Vector3(21.0, 0.1, 0.0))
-	make_box(Vector3(0.10, 0.05, 24.0), Color.WHITE, self, Vector3(0.0, 0.1, 0.0))
-
+	make_box(Vector3(48.0, 0.25, 30.0), Color("#101b15"), world_root, Vector3(0.0, -0.3, 0.0))
+	make_box(Vector3(42.0, 0.18, 24.0), Color("#176b3b"), world_root, Vector3.ZERO)
+	make_box(Vector3(42.0, 0.05, 0.12), Color.WHITE, world_root, Vector3(0.0, 0.11, -12.0))
+	make_box(Vector3(42.0, 0.05, 0.12), Color.WHITE, world_root, Vector3(0.0, 0.11, 12.0))
+	make_box(Vector3(0.12, 0.05, 24.0), Color.WHITE, world_root, Vector3(-21.0, 0.11, 0.0))
+	make_box(Vector3(0.12, 0.05, 24.0), Color.WHITE, world_root, Vector3(21.0, 0.11, 0.0))
+	make_box(Vector3(0.10, 0.05, 24.0), Color.WHITE, world_root, Vector3(0.0, 0.11, 0.0))
+	make_box(Vector3(7.0, 0.05, 0.10), Color.WHITE, world_root, Vector3(-17.5, 0.11, -3.2))
+	make_box(Vector3(7.0, 0.05, 0.10), Color.WHITE, world_root, Vector3(-17.5, 0.11, 3.2))
+	make_box(Vector3(7.0, 0.05, 0.10), Color.WHITE, world_root, Vector3(17.5, 0.11, -3.2))
+	make_box(Vector3(7.0, 0.05, 0.10), Color.WHITE, world_root, Vector3(17.5, 0.11, 3.2))
+	make_box(Vector3(0.10, 0.05, 6.4), Color.WHITE, world_root, Vector3(-14.0, 0.11, 0.0))
+	make_box(Vector3(0.10, 0.05, 6.4), Color.WHITE, world_root, Vector3(14.0, 0.11, 0.0))
 	var circle_outer := MeshInstance3D.new()
-	var outer_mesh := CylinderMesh.new()
-	outer_mesh.top_radius = 4.0
-	outer_mesh.bottom_radius = 4.0
-	outer_mesh.height = 0.06
-	outer_mesh.radial_segments = 64
-	circle_outer.mesh = outer_mesh
+	var outer := CylinderMesh.new()
+	outer.top_radius = 4.0
+	outer.bottom_radius = 4.0
+	outer.height = 0.04
+	outer.radial_segments = 48
+	circle_outer.mesh = outer
 	circle_outer.material_override = make_material(Color.WHITE)
-	circle_outer.position = Vector3(0.0, 0.08, 0.0)
-	add_child(circle_outer)
-
+	circle_outer.position = Vector3(0.0, 0.09, 0.0)
+	world_root.add_child(circle_outer)
 	var circle_inner := MeshInstance3D.new()
-	var inner_mesh := CylinderMesh.new()
-	inner_mesh.top_radius = 3.84
-	inner_mesh.bottom_radius = 3.84
-	inner_mesh.height = 0.08
-	inner_mesh.radial_segments = 64
-	circle_inner.mesh = inner_mesh
-	circle_inner.material_override = make_material(Color("#1d7a42"))
+	var inner := CylinderMesh.new()
+	inner.top_radius = 3.82
+	inner.bottom_radius = 3.82
+	inner.height = 0.06
+	inner.radial_segments = 48
+	circle_inner.mesh = inner
+	circle_inner.material_override = make_material(Color("#176b3b"))
 	circle_inner.position = Vector3(0.0, 0.13, 0.0)
-	add_child(circle_inner)
-
-	make_box(Vector3(7.0, 0.06, 0.10), Color.WHITE, self, Vector3(-17.5, 0.11, -3.2))
-	make_box(Vector3(7.0, 0.06, 0.10), Color.WHITE, self, Vector3(-17.5, 0.11, 3.2))
-	make_box(Vector3(7.0, 0.06, 0.10), Color.WHITE, self, Vector3(17.5, 0.11, -3.2))
-	make_box(Vector3(7.0, 0.06, 0.10), Color.WHITE, self, Vector3(17.5, 0.11, 3.2))
-	make_box(Vector3(0.10, 0.06, 6.4), Color.WHITE, self, Vector3(-14.0, 0.11, 0.0))
-	make_box(Vector3(0.10, 0.06, 6.4), Color.WHITE, self, Vector3(14.0, 0.11, 0.0))
-
+	world_root.add_child(circle_inner)
 	create_goal(Vector3(-21.7, 0.0, 0.0))
 	create_goal(Vector3(21.7, 0.0, 0.0))
 
 func create_goal(pos: Vector3) -> void:
 	var goal_color := Color("#e8e8e8")
-	make_box(Vector3(0.25, 2.4, 0.25), goal_color, self, pos + Vector3(0.0, 1.2, -3.2))
-	make_box(Vector3(0.25, 2.4, 0.25), goal_color, self, pos + Vector3(0.0, 1.2, 3.2))
-	make_box(Vector3(0.25, 0.25, 6.5), goal_color, self, pos + Vector3(0.0, 2.4, 0.0))
+	make_box(Vector3(0.25, 2.4, 0.25), goal_color, world_root, pos + Vector3(0.0, 1.2, -3.2))
+	make_box(Vector3(0.25, 2.4, 0.25), goal_color, world_root, pos + Vector3(0.0, 1.2, 3.2))
+	make_box(Vector3(0.25, 0.25, 6.5), goal_color, world_root, pos + Vector3(0.0, 2.4, 0.0))
 
 func create_stands() -> void:
 	for z in [-15.0, 15.0]:
-		make_box(Vector3(48.0, 1.4, 2.0), Color("#30343d"), self, Vector3(0.0, 0.5, z))
+		make_box(Vector3(48.0, 1.4, 2.0), Color("#272d36"), world_root, Vector3(0.0, 0.5, z))
 		for x in range(-20, 21, 4):
-			make_box(Vector3(2.4, 0.8, 0.8), Color("#d7a62b"), self, Vector3(float(x), 1.5, z))
+			make_box(Vector3(2.2, 0.8, 0.8), Color("#d7a62b"), world_root, Vector3(float(x), 1.5, z))
 
 func create_ui() -> void:
 	ui = CanvasLayer.new()
 	add_child(ui)
-
-	var top_panel := ColorRect.new()
-	top_panel.color = Color(0.02, 0.04, 0.07, 0.82)
-	top_panel.position = Vector2.ZERO
-	top_panel.size = Vector2(1280, 90)
-	ui.add_child(top_panel)
-
-	var title := Label.new()
-	title.text = "STREET FOOTBALL: PAKISTAN  •  3D"
-	title.position = Vector2(28, 24)
-	title.add_theme_font_size_override("font_size", 23)
-	ui.add_child(title)
-
-	score_label = Label.new()
-	score_label.position = Vector2(565, 18)
-	score_label.add_theme_font_size_override("font_size", 34)
-	ui.add_child(score_label)
-
-	timer_label = Label.new()
-	timer_label.position = Vector2(1100, 24)
-	timer_label.add_theme_font_size_override("font_size", 28)
-	ui.add_child(timer_label)
-
-	var controls := Label.new()
-	controls.text = "WASD / ARROWS Move    SHIFT Sprint    SPACE Shoot    E Pass    TAB Switch    R Restart"
-	controls.position = Vector2(28, 94)
-	controls.add_theme_font_size_override("font_size", 15)
-	ui.add_child(controls)
-
-	message_label = Label.new()
-	message_label.position = Vector2(390, 300)
-	message_label.size = Vector2(500, 130)
+	screen_root = Control.new()
+	screen_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ui.add_child(screen_root)
+	menu_root = make_panel()
+	screen_root.add_child(menu_root)
+	make_title(menu_root, "STREET FOOTBALL\nPAKISTAN", Vector2(0, 55), 46)
+	make_label(menu_root, "3D STREET FOOTBALL • OFFLINE", Vector2(0, 175), 20, Color("#c7d8ff"), true)
+	var play := make_button(menu_root, "PLAY", Vector2(470, 230), Vector2(340, 64), 25)
+	play.pressed.connect(start_match)
+	var championship := make_button(menu_root, "CHAMPIONSHIP", Vector2(470, 305), Vector2(340, 58), 21)
+	championship.pressed.connect(show_levels)
+	var team := make_button(menu_root, "MY TEAM", Vector2(470, 375), Vector2(160, 54), 18)
+	team.pressed.connect(show_team)
+	var shop := make_button(menu_root, "SHOP", Vector2(650, 375), Vector2(160, 54), 18)
+	shop.pressed.connect(show_shop)
+	var settings := make_button(menu_root, "SETTINGS", Vector2(470, 442), Vector2(340, 54), 18)
+	settings.pressed.connect(show_settings)
+	coins_label = make_label(menu_root, "COINS: %d" % coins, Vector2(0, 520), 20, Color("#ffd45a"), true)
+	make_label(menu_root, "5 levels • 3v3 • 3 minute matches • touch + keyboard", Vector2(0, 575), 16, Color("#9fb1c5"), true)
+	match_root = make_panel()
+	screen_root.add_child(match_root)
+	var top := ColorRect.new()
+	top.color = Color(0.02, 0.04, 0.07, 0.88)
+	top.size = Vector2(1280, 82)
+	match_root.add_child(top)
+	score_label = make_label(match_root, "0  -  0", Vector2(0, 18), 32, Color.WHITE, true)
+	timer_label = make_label(match_root, "03:00", Vector2(1080, 20), 27, Color.WHITE, true)
+	level_label = make_label(match_root, "LAHORE STREET", Vector2(28, 22), 21, Color("#dce9f8"), false)
+	message_label = make_label(match_root, "", Vector2(390, 285), 34, Color.WHITE, true)
+	message_label.size = Vector2(500, 120)
 	message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	message_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	message_label.add_theme_font_size_override("font_size", 32)
-	ui.add_child(message_label)
+	make_touch_controls()
+	match_root.visible = false
+	level_root = make_panel()
+	screen_root.add_child(level_root)
+	make_title(level_root, "CHAMPIONSHIP", Vector2(0, 65), 38)
+	var level_names := ["LAHORE STREET", "KARACHI ROOFTOP", "PESHAWAR NIGHT", "ISLAMABAD CUP", "PAKISTAN FINAL"]
+	for i in 5:
+		var level_button := make_button(level_root, "%d  %s" % [i + 1, level_names[i]], Vector2(430, 150 + i * 68), Vector2(420, 55), 19)
+		level_button.pressed.connect(select_level.bind(i))
+	var back := make_button(level_root, "BACK", Vector2(540, 515), Vector2(200, 52), 18)
+	back.pressed.connect(show_menu)
+	level_root.visible = false
+	info_root = make_panel()
+	screen_root.add_child(info_root)
+	info_root.visible = false
 
-	var shoot_button := Button.new()
-	shoot_button.text = "SHOOT"
-	shoot_button.position = Vector2(1080, 535)
-	shoot_button.size = Vector2(130, 90)
-	shoot_button.add_theme_font_size_override("font_size", 20)
-	shoot_button.pressed.connect(shoot_ball)
-	ui.add_child(shoot_button)
+func make_panel() -> Control:
+	var panel := Control.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var bg := ColorRect.new()
+	bg.color = Color("#0b1622")
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.add_child(bg)
+	return panel
 
-	var pass_button_ui := Button.new()
-	pass_button_ui.text = "PASS"
-	pass_button_ui.position = Vector2(930, 610)
-	pass_button_ui.size = Vector2(110, 70)
-	pass_button_ui.add_theme_font_size_override("font_size", 18)
-	pass_button_ui.pressed.connect(pass_ball)
-	ui.add_child(pass_button_ui)
+func make_title(parent: Control, text: String, pos: Vector2, size: int) -> Label:
+	var label := make_label(parent, text, pos, size, Color.WHITE, true)
+	label.size = Vector2(1280, 110)
+	return label
 
-	var switch_button := Button.new()
-	switch_button.text = "SWITCH"
-	switch_button.position = Vector2(800, 610)
-	switch_button.size = Vector2(110, 70)
-	switch_button.add_theme_font_size_override("font_size", 16)
-	switch_button.pressed.connect(switch_player)
-	ui.add_child(switch_button)
+func make_label(parent: Control, text: String, pos: Vector2, size: int, color: Color, centered: bool) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.position = pos
+	label.add_theme_font_size_override("font_size", size)
+	label.add_theme_color_override("font_color", color)
+	if centered:
+		label.size = Vector2(1280, 55)
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	parent.add_child(label)
+	return label
 
-	var move_label := Label.new()
-	move_label.text = "◉\nMOVE"
-	move_label.position = Vector2(78, 555)
-	move_label.add_theme_font_size_override("font_size", 18)
-	ui.add_child(move_label)
+func make_button(parent: Control, text: String, pos: Vector2, size: Vector2, font_size: int) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.position = pos
+	button.size = size
+	button.add_theme_font_size_override("font_size", font_size)
+	parent.add_child(button)
+	return button
+
+func make_touch_controls() -> void:
+	var up := make_button(match_root, "▲", Vector2(75, 525), Vector2(70, 55), 20)
+	var down := make_button(match_root, "▼", Vector2(75, 640), Vector2(70, 55), 20)
+	var left := make_button(match_root, "◀", Vector2(5, 582), Vector2(70, 55), 20)
+	var right := make_button(match_root, "▶", Vector2(145, 582), Vector2(70, 55), 20)
+	up.button_down.connect(func(): move_vector = Vector2(0, -1))
+	up.button_up.connect(clear_move)
+	down.button_down.connect(func(): move_vector = Vector2(0, 1))
+	down.button_up.connect(clear_move)
+	left.button_down.connect(func(): move_vector = Vector2(-1, 0))
+	left.button_up.connect(clear_move)
+	right.button_down.connect(func(): move_vector = Vector2(1, 0))
+	right.button_up.connect(clear_move)
+	var sprint := make_button(match_root, "SPRINT", Vector2(235, 610), Vector2(115, 62), 16)
+	sprint.button_down.connect(func(): sprint_pressed = true)
+	sprint.button_up.connect(func(): sprint_pressed = false)
+	var pass_button := make_button(match_root, "PASS", Vector2(820, 610), Vector2(110, 65), 18)
+	pass_button.pressed.connect(pass_ball)
+	var switcher := make_button(match_root, "SWITCH", Vector2(940, 610), Vector2(110, 65), 16)
+	switcher.pressed.connect(switch_player)
+	var shoot := make_button(match_root, "SHOOT", Vector2(1060, 520), Vector2(150, 95), 22)
+	shoot.pressed.connect(shoot_ball)
+	var exit := make_button(match_root, "MENU", Vector2(1090, 12), Vector2(90, 42), 14)
+	exit.pressed.connect(show_menu)
+
+func clear_move() -> void:
+	move_vector = Vector2.ZERO
+
+func show_menu() -> void:
+	game_screen = "menu"
+	menu_root.visible = true
+	match_root.visible = false
+	level_root.visible = false
+	info_root.visible = false
+	if coins_label != null:
+		coins_label.text = "COINS: %d" % coins
+	save_game()
+
+func show_levels() -> void:
+	game_screen = "levels"
+	menu_root.visible = false
+	match_root.visible = false
+	level_root.visible = true
+	info_root.visible = false
+
+func select_level(index: int) -> void:
+	current_level = index
+	start_match()
+
+func start_match() -> void:
+	game_screen = "match"
+	menu_root.visible = false
+	level_root.visible = false
+	info_root.visible = false
+	match_root.visible = true
+	reset_match()
+
+func show_team() -> void:
+	show_info("MY TEAM", "AYAAN • Captain\nHAMZA • Speedster\nDANIYAL • Sniper\nSHAHZAIB • Playmaker\nAKBAR • Defender\nSAAD • Goalkeeper\n\nCore roster available offline.")
+
+func show_shop() -> void:
+	show_info("SHOP", "COINS: %d\n\nGREEN STREET KIT — 250\nGOLDEN BALL — 350\nNIGHT BOOTS — 400\n\nCosmetics are optional and do not create pay-to-win stats." % coins)
+
+func show_settings() -> void:
+	show_info("SETTINGS", "SOUND AND PERFORMANCE\n\nTouch controls and keyboard controls are enabled.\nCompatibility renderer is selected for mobile hardware.\nProgress is saved locally.")
+
+func show_info(title: String, body: String) -> void:
+	game_screen = "info"
+	menu_root.visible = false
+	match_root.visible = false
+	level_root.visible = false
+	info_root.visible = true
+	for child in info_root.get_children():
+		if child is Label or child is Button:
+			child.queue_free()
+	make_title(info_root, title, Vector2(0, 65), 38)
+	var body_label := make_label(info_root, body, Vector2(300, 170), 21, Color("#d7e3f0"), true)
+	body_label.size = Vector2(680, 300)
+	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var back := make_button(info_root, "BACK", Vector2(540, 535), Vector2(200, 54), 18)
+	back.pressed.connect(show_menu)
 
 func reset_match() -> void:
 	clear_players()
 	score = [0, 0]
 	time_left = MATCH_LENGTH
 	finished = false
-	message = ""
-	message_time = 0.0
-
-	var pakistan_positions := [Vector3(-12, 0, 0), Vector3(-7, 0, -5), Vector3(-7, 0, 5)]
-	var pakistan_names := ["Hamza", "Daniyal", "Shahzaib"]
+	message = "KICK OFF!"
+	message_time = 1.5
+	move_vector = Vector2.ZERO
+	var positions := [Vector3(-12, 0, 0), Vector3(-7, 0, -5), Vector3(-7, 0, 5)]
+	var names := ["Hamza", "Daniyal", "Shahzaib"]
 	for i in 3:
-		var player := Player.new(pakistan_positions[i], 0, i, pakistan_names[i])
+		var player := Player.new(positions[i], 0, i, names[i])
 		pakistan.append(player)
 		player.node = create_player_visual(player)
-
-	var opponent_positions := [Vector3(12, 0, 0), Vector3(7, 0, -5), Vector3(7, 0, 5)]
+	var enemy_positions := [Vector3(12, 0, 0), Vector3(7, 0, -5), Vector3(7, 0, 5)]
 	for i in 3:
-		var opponent := Player.new(opponent_positions[i], 1, i, "Opponent %d" % (i + 1))
-		opponents.append(opponent)
-		opponent.node = create_player_visual(opponent)
-
-	controlled = pakistan[0]
-	controlled.active = true
+		var enemy := Player.new(enemy_positions[i], 1, i, "Opponent %d" % (i + 1))
+		opponents.append(enemy)
+		enemy.node = create_player_visual(enemy)
+	selected_player = clampi(selected_player, 0, 2)
+	controlled = pakistan[selected_player]
 	ball_pos = Vector3.ZERO
 	ball_velocity = Vector3.ZERO
 	ball_owner = null
+	create_ball()
 
+func create_ball() -> void:
 	if is_instance_valid(ball_node):
 		ball_node.queue_free()
 	ball_node = MeshInstance3D.new()
-	var ball_mesh := SphereMesh.new()
-	ball_mesh.radius = 0.42
-	ball_mesh.height = 0.84
-	ball_mesh.radial_segments = 24
-	ball_mesh.rings = 12
-	ball_node.mesh = ball_mesh
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.42
+	sphere.height = 0.84
+	sphere.radial_segments = 16
+	sphere.rings = 8
+	ball_node.mesh = sphere
 	ball_node.material_override = make_material(Color("#f4f4f4"), 0.05, 0.3)
-	add_child(ball_node)
-	update_visuals()
+	world_root.add_child(ball_node)
 
 func clear_players() -> void:
 	for player in pakistan:
 		if is_instance_valid(player.node):
 			player.node.queue_free()
-	for player in opponents:
-		if is_instance_valid(player.node):
-			player.node.queue_free()
+	for enemy in opponents:
+		if is_instance_valid(enemy.node):
+			enemy.node.queue_free()
 	pakistan.clear()
 	opponents.clear()
 
 func create_player_visual(player: Player) -> Node3D:
 	var root := Node3D.new()
-	add_child(root)
-
+	world_root.add_child(root)
 	var body := MeshInstance3D.new()
-	var body_mesh := CapsuleMesh.new()
-	body_mesh.radius = 0.55
-	body_mesh.height = 1.6
-	body_mesh.radial_segments = 16
-	body.mesh = body_mesh
+	var capsule := CapsuleMesh.new()
+	capsule.radius = 0.55
+	capsule.height = 1.6
+	capsule.radial_segments = 12
+	body.mesh = capsule
 	body.material_override = make_material(Color("#178a4a") if player.team == 0 else Color("#c73838"))
 	body.position.y = 0.9
 	root.add_child(body)
-
 	var head := MeshInstance3D.new()
 	var head_mesh := SphereMesh.new()
 	head_mesh.radius = 0.32
 	head_mesh.height = 0.64
+	head_mesh.radial_segments = 12
 	head.mesh = head_mesh
 	head.material_override = make_material(Color("#d99a72"))
 	head.position.y = 1.95
 	root.add_child(head)
-
-	var shadow := MeshInstance3D.new()
-	var shadow_mesh := CylinderMesh.new()
-	shadow_mesh.top_radius = 0.75
-	shadow_mesh.bottom_radius = 0.75
-	shadow_mesh.height = 0.03
-	shadow.mesh = shadow_mesh
-	shadow.material_override = make_material(Color(0, 0, 0, 0.25))
-	shadow.position.y = 0.03
-	root.add_child(shadow)
-
 	root.position = player.pos
 	return root
 
 func _process(delta: float) -> void:
+	if game_screen != "match":
+		return
 	if finished:
 		if Input.is_key_pressed(KEY_R):
 			reset_match()
 		update_hud()
 		update_visuals()
 		return
-
 	time_left = max(0.0, time_left - delta)
 	if time_left <= 0.0:
 		finished = true
 		message = "FULL TIME"
+		message_time = 5.0
 	else:
 		update_human(delta)
 		update_ai(delta)
 		update_ball(delta)
 		check_goal()
-
 	message_time = max(0.0, message_time - delta)
 	update_hud()
 	update_visuals()
 
-func get_move_dir() -> Vector3:
+func get_move_direction() -> Vector3:
 	var x := Input.get_axis("ui_left", "ui_right")
 	var z := Input.get_axis("ui_up", "ui_down")
 	var direction := Vector3(x, 0.0, z)
+	if move_vector.length() > 0.05:
+		direction = Vector3(move_vector.x, 0.0, move_vector.y)
 	return direction.normalized() if direction.length() > 0.05 else Vector3.ZERO
 
 func update_human(delta: float) -> void:
-	var direction := get_move_dir()
-	var speed := SPRINT_SPEED if Input.is_key_pressed(KEY_SHIFT) else PLAYER_SPEED
+	var direction := get_move_direction()
+	var sprinting := sprint_pressed or Input.is_key_pressed(KEY_SHIFT)
+	var speed := SPRINT_SPEED if sprinting else PLAYER_SPEED
 	if direction != Vector3.ZERO:
 		controlled.pos += direction * speed * delta
 		controlled.pos.x = clamp(controlled.pos.x, -20.0, 20.0)
 		controlled.pos.z = clamp(controlled.pos.z, -10.5, 10.5)
 		if ball_owner == controlled:
-			ball_pos = controlled.pos + direction * 1.1
+			ball_pos = controlled.pos + direction * 1.15
 	if ball_owner == null and controlled.pos.distance_to(ball_pos) < 1.25:
 		ball_owner = controlled
 
@@ -347,45 +442,36 @@ func update_ai(delta: float) -> void:
 	for player in all_players:
 		if player == controlled:
 			continue
-
 		player.cooldown = max(0.0, player.cooldown - delta)
 		var target := player.home
 		var nearest := closest_player(player.team)
-
 		if ball_owner != null and ball_owner.team == player.team:
 			if player != ball_owner:
-				target = player.home.lerp(ball_owner.pos, 0.3)
+				target = player.home.lerp(ball_owner.pos, 0.25)
 		elif nearest == player:
 			target = ball_pos
-		elif player.role == 0:
-			target = player.home.lerp(ball_pos, 0.25)
-		elif player.role == 1:
-			target = player.home.lerp(ball_pos, 0.16)
 		else:
-			target = player.home.lerp(ball_pos, 0.08)
-
+			target = player.home.lerp(ball_pos, 0.16 + float(player.role) * 0.03)
 		var direction := player.pos.direction_to(target)
-		var speed := 5.1 if player.team == 0 else 5.4
-		player.pos += direction * speed * delta
+		if direction.length() > 0.05:
+			player.pos += direction * (5.0 if player.team == 0 else 5.3) * delta
 		player.pos.x = clamp(player.pos.x, -20.0, 20.0)
 		player.pos.z = clamp(player.pos.z, -10.5, 10.5)
-
 		if ball_owner == null and player.pos.distance_to(ball_pos) < 1.1:
 			ball_owner = player
-
 		if ball_owner == player:
-			var goal := Vector3(21.5, 0.0, 0.0) if player.team == 0 else Vector3(-21.5, 0.0, 0.0)
-			ball_pos = player.pos + player.pos.direction_to(goal) * 1.0
-			if player.pos.distance_to(goal) < 9.0 and player.cooldown <= 0.0:
-				ball_velocity = player.pos.direction_to(goal) * BALL_SPEED
+			var target_goal := Vector3(21.5, 0.0, 0.0) if player.team == 0 else Vector3(-21.5, 0.0, 0.0)
+			ball_pos = player.pos + player.pos.direction_to(target_goal) * 1.05
+			if player.pos.distance_to(target_goal) < 8.5 and player.cooldown <= 0.0:
+				ball_velocity = player.pos.direction_to(target_goal) * BALL_SPEED
 				ball_owner = null
-				player.cooldown = 1.4
+				player.cooldown = 1.3
 
 func closest_player(team_id: int) -> Player:
-	var players := pakistan if team_id == 0 else opponents
-	var best: Player = players[0]
+	var list := pakistan if team_id == 0 else opponents
+	var best: Player = list[0]
 	var best_distance := best.pos.distance_to(ball_pos)
-	for player in players:
+	for player in list:
 		var distance := player.pos.distance_to(ball_pos)
 		if distance < best_distance:
 			best_distance = distance
@@ -394,50 +480,58 @@ func closest_player(team_id: int) -> Player:
 
 func nearest_teammate() -> Player:
 	var best: Player = null
-	var best_distance := INF
+	var best_distance := 9999.0
 	for player in pakistan:
-		if player != controlled:
-			var distance := player.pos.distance_to(controlled.pos)
-			if distance < best_distance:
-				best_distance = distance
-				best = player
+		if player == controlled:
+			continue
+		var distance := controlled.pos.distance_to(player.pos)
+		if distance < best_distance:
+			best_distance = distance
+			best = player
 	return best
 
 func update_ball(delta: float) -> void:
 	if ball_owner != null:
 		return
 	ball_pos += ball_velocity * delta
-	ball_velocity = ball_velocity.move_toward(Vector3.ZERO, 20.0 * delta)
+	ball_velocity = ball_velocity.move_toward(Vector3.ZERO, 18.0 * delta)
 	if abs(ball_pos.z) > 11.6:
-		ball_velocity.z *= -0.75
-	ball_pos.z = clamp(ball_pos.z, -11.6, 11.6)
+		ball_pos.z = clamp(ball_pos.z, -11.6, 11.6)
+		ball_velocity.z *= -0.7
+	if abs(ball_pos.x) > 23.5:
+		ball_pos.x = clamp(ball_pos.x, -23.5, 23.5)
+		ball_velocity.x *= -0.75
 
 func check_goal() -> void:
-	if ball_pos.x < -22.0 and abs(ball_pos.z) < 3.2:
+	if ball_pos.x < -22.0 and abs(ball_pos.z) < 3.25:
 		score[1] += 1
-		kickoff("OPPONENT SCORES")
-	elif ball_pos.x > 22.0 and abs(ball_pos.z) < 3.2:
+		coins += 25
+		message = "OPPONENT SCORES"
+		kickoff()
+	elif ball_pos.x > 22.0 and abs(ball_pos.z) < 3.25:
 		score[0] += 1
-		kickoff("PAKISTAN SCORES!")
-	elif abs(ball_pos.x) > 23.5:
+		coins += 50
+		message = "PAKISTAN SCORES!"
+		kickoff()
+	elif abs(ball_pos.x) > 22.0:
+		ball_pos.x = clamp(ball_pos.x, -22.0, 22.0)
 		ball_velocity.x *= -0.8
-		ball_pos.x = clamp(ball_pos.x, -23.5, 23.5)
 
-func kickoff(text: String) -> void:
-	message = text
+func kickoff() -> void:
 	message_time = 2.0
 	ball_pos = Vector3.ZERO
 	ball_velocity = Vector3.ZERO
 	ball_owner = null
 	for player in pakistan:
 		player.pos = player.home
-	for player in opponents:
-		player.pos = player.home
+	for enemy in opponents:
+		enemy.pos = enemy.home
+	save_game()
 
 func shoot_ball() -> void:
 	if ball_owner != controlled:
 		return
-	var direction := get_move_dir()
+	var direction := get_move_direction()
 	if direction == Vector3.ZERO:
 		direction = Vector3.RIGHT
 	ball_velocity = direction * BALL_SPEED
@@ -456,43 +550,53 @@ func pass_ball() -> void:
 func switch_player() -> void:
 	if pakistan.is_empty():
 		return
-	var current_index := pakistan.find(controlled)
-	if current_index < 0:
-		current_index = 0
-	controlled.active = false
-	for offset in range(1, pakistan.size() + 1):
-		var next_index := (current_index + offset) % pakistan.size()
-		if pakistan[next_index].pos.distance_to(ball_pos) < 12.0 or offset == pakistan.size():
-			controlled = pakistan[next_index]
-			controlled.active = true
-			break
-
-func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_SPACE:
-			shoot_ball()
-		elif event.keycode == KEY_E:
-			pass_ball()
-		elif event.keycode == KEY_TAB:
-			switch_player()
-
-func update_hud() -> void:
-	if score_label != null:
-		score_label.text = "PAKISTAN  %d  -  %d  OPPONENT" % [score[0], score[1]]
-	if timer_label != null:
-		var total_seconds := int(ceil(time_left))
-		var minutes := total_seconds / 60
-		var seconds := total_seconds % 60
-		timer_label.text = "%02d:%02d" % [minutes, seconds]
-	if message_label != null:
-		message_label.text = message if message_time > 0.0 or finished else ""
+	selected_player = (selected_player + 1) % pakistan.size()
+	if controlled != null:
+		controlled.active = false
+	controlled = pakistan[selected_player]
+	controlled.active = true
 
 func update_visuals() -> void:
 	for player in pakistan:
 		if is_instance_valid(player.node):
 			player.node.position = player.pos
-	for player in opponents:
-		if is_instance_valid(player.node):
-			player.node.position = player.pos
+	for enemy in opponents:
+		if is_instance_valid(enemy.node):
+			enemy.node.position = enemy.pos
 	if is_instance_valid(ball_node):
 		ball_node.position = ball_pos + Vector3(0.0, 0.42, 0.0)
+
+func update_hud() -> void:
+	if score_label == null:
+		return
+	score_label.text = "%d  -  %d" % [score[0], score[1]]
+	var total_seconds := int(ceil(time_left))
+	var minutes := int(total_seconds / 60)
+	var seconds := total_seconds % 60
+	timer_label.text = "%02d:%02d" % [minutes, seconds]
+	var names := ["LAHORE STREET", "KARACHI ROOFTOP", "PESHAWAR NIGHT", "ISLAMABAD CUP", "PAKISTAN FINAL"]
+	level_label.text = names[current_level]
+	message_label.text = message if message_time > 0.0 else ""
+
+func load_save() -> void:
+	if not FileAccess.file_exists(SAVE_PATH):
+		return
+	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if file == null:
+		return
+	var data = file.get_var()
+	if data is Dictionary:
+		coins = int(data.get("coins", 500))
+		selected_player = clampi(int(data.get("selected_player", 0)), 0, 2)
+	file.close()
+
+func save_game() -> void:
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file == null:
+		return
+	file.store_var({"coins": coins, "selected_player": selected_player})
+	file.close()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_WM_CLOSE_REQUEST:
+		save_game()
