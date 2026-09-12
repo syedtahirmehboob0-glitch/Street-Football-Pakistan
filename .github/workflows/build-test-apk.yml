@@ -45,20 +45,21 @@ jobs:
           set -e
           JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
           echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_SDK_PATH=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$RUNNER_TEMP/debug.keystore" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/godot-editor"
           keytool -genkeypair -v -keystore "$RUNNER_TEMP/debug.keystore" -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" >/dev/null 2>&1
-          sed -i "s|keystore/debug=\"\"|keystore/debug=\"$RUNNER_TEMP/debug.keystore\"|" export_presets.cfg
-          sed -i "s|keystore/debug_user=\"\"|keystore/debug_user=\"androiddebugkey\"|" export_presets.cfg
-          sed -i "s|keystore/debug_password=\"\"|keystore/debug_password=\"android\"|" export_presets.cfg
-          sed -i "s|keystore/release=\"\"|keystore/release=\"$RUNNER_TEMP/debug.keystore\"|" export_presets.cfg
-          sed -i "s|keystore/release_user=\"\"|keystore/release_user=\"androiddebugkey\"|" export_presets.cfg
-          sed -i "s|keystore/release_password=\"\"|keystore/release_password=\"android\"|" export_presets.cfg
           cat > "$RUNNER_TEMP/godot-editor/editor_settings-4.tres" <<EOF
-          [gd_resource type="EditorSettings" format=3]
+          [godot_resource type="EditorSettings" format=3]
 
           [resource]
-          export/android/android_sdk_path = "/usr/local/lib/android/sdk"
+          export/android/android_sdk_path = "$ANDROID_HOME"
           export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/debug_keystore = "$RUNNER_TEMP/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
           EOF
 
       - name: Godot project validation
