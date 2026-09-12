@@ -124,3 +124,5 @@ jobs:
         with:
           name: Street-Football-Pakistan-debug-apk
           path: build/Street-Football-Pakistan-debug.apk
+
+# Force a fresh Android export after the editor-settings-path fix.
