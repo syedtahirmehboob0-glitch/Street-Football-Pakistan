@@ -109,7 +109,10 @@ jobs:
           set -euo pipefail
           rm -rf android
           timeout 3m godot --headless --editor --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --install-android-build-template
-          test -f android/build.gradle || test -f android/build.gradle.kts
+          echo "Installed Android template tree:"
+          find android -maxdepth 3 -type f \( -name build.gradle -o -name build.gradle.kts -o -name settings.gradle -o -name gradlew \) -print
+          test -f android/build/build.gradle || test -f android/build/build.gradle.kts
+          test -f android/build/gradlew
           echo "Android Gradle build template installed successfully"
 
       - name: Export debug APK
