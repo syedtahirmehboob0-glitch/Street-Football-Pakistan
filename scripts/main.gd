@@ -1,172 +1,343 @@
-extends Node2D
+extends Node3D
 
-const W := 1280.0
-const H := 720.0
+const FIELD_X := 22.0
+const FIELD_Z := 12.0
 const MATCH_LENGTH := 180.0
-const PLAYER_SPEED := 250.0
-const SPRINT_SPEED := 360.0
-const BALL_SPEED := 650.0
-const PASS_SPEED := 430.0
+const PLAYER_SPEED := 6.0
+const SPRINT_SPEED := 8.5
+const BALL_SPEED := 14.0
+const PASS_SPEED := 10.0
+const GOAL_Z := 3.2
 
 class Player:
- var pos: Vector2
- var home: Vector2
- var team: int
- var role: int
- var pname: String
+ var pos := Vector3.ZERO
+ var home := Vector3.ZERO
+ var team := 0
+ var role := 0
+ var pname := "Player"
+ var node: Node3D
  var active := false
- func _init(p: Vector2, t: int, r: int, n: String):
+ var velocity := Vector3.ZERO
+ var cooldown := 0.0
+ func _init(p: Vector3, t: int, r: int, n: String):
   pos=p; home=p; team=t; role=r; pname=n
 
 var pakistan: Array[Player] = []
 var opponents: Array[Player] = []
 var controlled: Player
-var ball_pos := Vector2(W/2.0,H/2.0)
-var ball_vel := Vector2.ZERO
+var ball_pos := Vector3.ZERO
+var ball_velocity := Vector3.ZERO
 var owner: Player = null
-var score := [0,0]
+var score := [0, 0]
 var time_left := MATCH_LENGTH
 var finished := false
-var touch_start := Vector2.ZERO
-var touch_dir := Vector2.ZERO
-var touch_active := false
 var message := ""
 var message_time := 0.0
+var camera: Camera3D
+var camera_target := Vector3.ZERO
+var ui: CanvasLayer
+var score_label: Label
+var timer_label: Label
+var message_label: Label
+var controls_label: Label
+var joystick_center := Vector2(120, 600)
+var joystick_vector := Vector2.ZERO
+var joystick_active := false
+var shoot_button := Rect2(1080, 535, 130, 90)
+var pass_button := Rect2(930, 610, 110, 70)
+var ball_node: MeshInstance3D
+var rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
+ rng.randomize()
+ create_world()
  reset_match()
- queue_redraw()
+
+func create_world() -> void:
+ var env := WorldEnvironment.new()
+ var environment := Environment.new()
+ environment.background_mode = Environment.BG_COLOR
+ environment.background_color = Color("#102030")
+ environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+ environment.ambient_light_color = Color("#c7d8ff")
+ environment.ambient_light_energy = 0.65
+ environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+ env.environment = environment
+ add_child(env)
+
+ var sun := DirectionalLight3D.new()
+ sun.rotation_degrees = Vector3(-55, -25, 0)
+ sun.light_energy = 1.2
+ sun.shadow_enabled = true
+ add_child(sun)
+
+ camera = Camera3D.new()
+ camera.position = Vector3(0, 18, 18)
+ camera.rotation_degrees = Vector3(-48, 0, 0)
+ camera.current = true
+ add_child(camera)
+
+ create_field()
+ create_stands()
+ create_ui()
+
+func material(color: Color, metallic := 0.0, roughness := 0.7) -> StandardMaterial3D:
+ var m := StandardMaterial3D.new()
+ m.albedo_color = color
+ m.metallic = metallic
+ m.roughness = roughness
+ return m
+
+func box(size: Vector3, color: Color, parent: Node3D, pos: Vector3) -> MeshInstance3D:
+ var n := MeshInstance3D.new()
+ var mesh := BoxMesh.new()
+ mesh.size = size
+ n.mesh = mesh
+ n.material_override = material(color)
+ n.position = pos
+ parent.add_child(n)
+ return n
+
+func create_field() -> void:
+ box(Vector3(48, 0.25, 30), Color("#142018"), self, Vector3(0,-0.3,0))
+ box(Vector3(42, 0.18, 24), Color("#1d7a42"), self, Vector3(0,0,0))
+
+ var white := material(Color.WHITE)
+ box(Vector3(42,0.05,0.12), Color.WHITE, self, Vector3(0,0,12))
+ box(Vector3(42,0.05,0.12), Color.WHITE, self, Vector3(0,0,-12))
+ box(Vector3(0.12,0.05,24), Color.WHITE, self, Vector3(-21,0,0))
+ box(Vector3(0.12,0.05,24), Color.WHITE, self, Vector3(21,0,0))
+ box(Vector3(0.10,0.05,24), Color.WHITE, self, Vector3(0,0,0))
+
+ var circle := MeshInstance3D.new()
+ var cyl := CylinderMesh.new()
+ cyl.top_radius = 4.0
+ cyl.bottom_radius = 4.0
+ cyl.height = 0.06
+ cyl.radial_segments = 64
+ circle.mesh = cyl
+ circle.material_override = material(Color("#ffffff"))
+ circle.position = Vector3(0,0.04,0)
+ circle.scale = Vector3(1,1,1)
+ add_child(circle)
+
+ # Centre grass overlay keeps the line visible as a thin ring.
+ var center_disc := MeshInstance3D.new()
+ var disc := CylinderMesh.new()
+ disc.top_radius = 3.85
+ disc.bottom_radius = 3.85
+ disc.height = 0.07
+ disc.radial_segments = 64
+ center_disc.mesh = disc
+ center_disc.material_override = material(Color("#1d7a42"))
+ center_disc.position = Vector3(0,0.08,0)
+ add_child(center_disc)
+
+ # Penalty boxes and goals.
+ box(Vector3(7.0,0.06,0.10),Color.WHITE,self,Vector3(-14,0.06,0))
+ box(Vector3(7.0,0.06,0.10),Color.WHITE,self,Vector3(14,0.06,0))
+ box(Vector3(0.10,0.06,12),Color.WHITE,self,Vector3(-17.5,0.06,0))
+ box(Vector3(0.10,0.06,12),Color.WHITE,self,Vector3(17.5,0.06,0))
+ create_goal(Vector3(-21.7,0,0),-1)
+ create_goal(Vector3(21.7,0,0),1)
+
+func create_goal(p: Vector3, direction: int) -> void:
+ var post_color := Color("#e8e8e8")
+ box(Vector3(0.25,2.4,0.25),post_color,self,p+Vector3(0,1.2,-3.2))
+ box(Vector3(0.25,2.4,0.25),post_color,self,p+Vector3(0,1.2,3.2))
+ box(Vector3(0.25,0.25,6.5),post_color,self,p+Vector3(0,2.4,0))
+
+func create_stands() -> void:
+ for z in [-15.0,15.0]:
+  box(Vector3(48,1.4,2.0),Color("#30343d"),self,Vector3(0,0.5,z))
+  for x in range(-20,21,4):
+   box(Vector3(2.4,0.8,0.8),Color("#d7a62b"),self,Vector3(x,1.5,z))
+
+func create_ui() -> void:
+ ui=CanvasLayer.new(); add_child(ui)
+ var panel:=ColorRect.new(); panel.color=Color(0.02,0.04,0.07,0.78); panel.position=Vector2(0,0); panel.size=Vector2(1280,90); ui.add_child(panel)
+ score_label=Label.new(); score_label.position=Vector2(565,18); score_label.add_theme_font_size_override("font_size",34); ui.add_child(score_label)
+ timer_label=Label.new(); timer_label.position=Vector2(1100,24); timer_label.add_theme_font_size_override("font_size",28); ui.add_child(timer_label)
+ var title:=Label.new(); title.text="STREET FOOTBALL: PAKISTAN  •  3D"; title.position=Vector2(28,24); title.add_theme_font_size_override("font_size",23); ui.add_child(title)
+ controls_label=Label.new(); controls_label.position=Vector2(28,92); controls_label.text="WASD / ARROWS  Move    SHIFT  Sprint    SPACE  Shoot    E  Pass    TAB  Switch"; controls_label.add_theme_font_size_override("font_size",15); ui.add_child(controls_label)
+ message_label=Label.new(); message_label.position=Vector2(405,310); message_label.size=Vector2(470,120); message_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; message_label.vertical_alignment=VERTICAL_ALIGNMENT_CENTER; message_label.add_theme_font_size_override("font_size",32); ui.add_child(message_label)
+
+ var shoot:=Button.new(); shoot.text="SHOOT"; shoot.position=Vector2(1080,535); shoot.size=Vector2(130,90); shoot.add_theme_font_size_override("font_size",20); shoot.pressed.connect(shoot_ball); ui.add_child(shoot)
+ var pass:=Button.new(); pass.text="PASS"; pass.position=Vector2(930,610); pass.size=Vector2(110,70); pass.add_theme_font_size_override("font_size",18); pass.pressed.connect(pass_ball); ui.add_child(pass)
+ var switch_b:=Button.new(); switch_b.text="SWITCH"; switch_b.position=Vector2(800,610); switch_b.size=Vector2(110,70); switch_b.add_theme_font_size_override("font_size",16); switch_b.pressed.connect(switch_player); ui.add_child(switch_b)
+ var joy:=Label.new(); joy.text="◉\nMOVE"; joy.position=Vector2(78,555); joy.add_theme_font_size_override("font_size",18); joy.modulate=Color(0.8,0.9,1); ui.add_child(joy)
+
+func clear_players() -> void:
+ for p in pakistan + opponents:
+  if is_instance_valid(p.node): p.node.queue_free()
+ pakistan.clear(); opponents.clear()
 
 func reset_match() -> void:
- score=[0,0]; time_left=MATCH_LENGTH; finished=false; message=""; pakistan.clear(); opponents.clear()
- var pp=[Vector2(300,360),Vector2(390,250),Vector2(390,470)]
+ clear_players()
+ score=[0,0]; time_left=MATCH_LENGTH; finished=false; message=""; message_time=0
+ var pp=[Vector3(-12,0,0),Vector3(-7,0,-5),Vector3(-7,0,5)]
  var nn=["Hamza","Daniyal","Shahzaib"]
- for i in 3: pakistan.append(Player.new(pp[i],0,i,nn[i]))
- var op=[Vector2(980,360),Vector2(890,250),Vector2(890,470)]
- for i in 3: opponents.append(Player.new(op[i],1,i,"Opponent %d"%(i+1)))
- controlled=pakistan[0]; controlled.active=true; ball_pos=Vector2(W/2.0,H/2.0); ball_vel=Vector2.ZERO; owner=null
+ for i in 3:
+  var p:=Player.new(pp[i],0,i,nn[i]); pakistan.append(p); p.node=create_player_visual(p)
+ var op=[Vector3(12,0,0),Vector3(7,0,-5),Vector3(7,0,5)]
+ for i in 3:
+  var p:=Player.new(op[i],1,i,"Opponent %d"%(i+1)); opponents.append(p); p.node=create_player_visual(p)
+ controlled=pakistan[0]; controlled.active=true
+ ball_pos=Vector3.ZERO; ball_velocity=Vector3.ZERO; owner=null
+ if is_instance_valid(ball_node): ball_node.queue_free()
+ ball_node=MeshInstance3D.new()
+ var sphere:=SphereMesh.new(); sphere.radius=0.42; sphere.height=0.84; sphere.radial_segments=24; sphere.rings=12
+ ball_node.mesh=sphere; ball_node.material_override=material(Color("#f4f4f4"),0.05,0.3); add_child(ball_node)
+ update_visuals()
+
+func create_player_visual(p: Player) -> Node3D:
+ var root:=Node3D.new(); add_child(root)
+ var body:=MeshInstance3D.new(); var capsule:=CapsuleMesh.new(); capsule.radius=0.55; capsule.height=1.6; capsule.radial_segments=16; body.mesh=capsule; body.material_override=material(Color("#178a4a") if p.team==0 else Color("#c73838")); body.position.y=0.9; root.add_child(body)
+ var head:=MeshInstance3D.new(); var s:=SphereMesh.new(); s.radius=0.32; s.height=0.64; head.mesh=s; head.material_override=material(Color("#d99a72")); head.position.y=1.95; root.add_child(head)
+ var shadow:=MeshInstance3D.new(); var sh:=CylinderMesh.new(); sh.top_radius=0.75; sh.bottom_radius=0.75; sh.height=0.03; shadow.mesh=sh; shadow.material_override=material(Color(0,0,0,0.25)); shadow.position.y=0.03; root.add_child(shadow)
+ root.position=p.pos
+ return root
 
 func _process(delta: float) -> void:
- if finished: queue_redraw(); return
+ if finished:
+  update_hud(); update_visuals(); return
  time_left=max(0.0,time_left-delta)
- if time_left<=0.0: finished=true; message="FULL TIME"
+ if time_left<=0:
+  finished=true; message="FULL TIME"
  else:
-  update_human(delta); update_ai(delta); update_ball(delta); check_goal()
- message_time=max(0.0,message_time-delta); queue_redraw()
+  update_human(delta)
+  update_ai(delta)
+  update_ball(delta)
+  check_goal()
+ message_time=max(0.0,message_time-delta)
+ update_hud(); update_visuals()
 
-func input_dir() -> Vector2:
+func get_move_dir() -> Vector3:
  var d:=Input.get_vector("ui_left","ui_right","ui_up","ui_down")
- if touch_active and touch_dir.length()>0.1: d=touch_dir
- return d.normalized() if d.length()>1.0 else d
+ if joystick_active and joystick_vector.length()>0.1: d=joystick_vector
+ return Vector3(d.x,0,d.y).normalized() if d.length()>0.05 else Vector3.ZERO
 
 func update_human(delta: float) -> void:
- var d:=input_dir(); var speed:=SPRINT_SPEED if Input.is_key_pressed(KEY_SHIFT) else PLAYER_SPEED
- if d.length()>0.05:
-  controlled.pos+=d*speed*delta
-  controlled.pos.x=clamp(controlled.pos.x,70.0,W-70.0); controlled.pos.y=clamp(controlled.pos.y,120.0,H-70.0)
-  if owner==controlled: ball_pos=controlled.pos+d*34.0
- if owner==null and controlled.pos.distance_to(ball_pos)<42.0: owner=controlled
+ var d:=get_move_dir()
+ var speed:=SPRINT_SPEED if Input.is_key_pressed(KEY_SHIFT) else PLAYER_SPEED
+ if d.length()>0:
+  controlled.velocity=d*speed; controlled.pos+=controlled.velocity*delta
+  controlled.pos.x=clamp(controlled.pos.x,-20.0,20.0); controlled.pos.z=clamp(controlled.pos.z,-10.5,10.5)
+  if owner==controlled: ball_pos=controlled.pos+d*1.1
+ if owner==null and controlled.pos.distance_to(ball_pos)<1.25: owner=controlled
 
 func update_ai(delta: float) -> void:
  var all:=pakistan+opponents
  for p in all:
   if p==controlled: continue
+  p.cooldown=max(0.0,p.cooldown-delta)
   var target:=p.home
   var nearest:=closest_player(p.team)
   if owner!=null and owner.team==p.team:
-   if p!=owner: target=p.home.lerp(owner.pos,0.35)
+   if p!=owner: target=p.home.lerp(owner.pos,0.3)
+  elif nearest==p:
+   target=ball_pos
+  elif p.role==0:
+   target=p.home.lerp(ball_pos,0.25)
+  elif p.role==1:
+   target=p.home.lerp(ball_pos,0.16)
   else:
-   if nearest==p: target=ball_pos
-   elif p.role==1: target=p.home.lerp(ball_pos,0.18)
-   elif p.role==0: target=p.home.lerp(ball_pos,0.30)
-   else: target=p.home.lerp(ball_pos,0.10)
-  p.pos+=p.pos.direction_to(target)*(185.0 if p.team==0 else 200.0)*delta
-  p.pos.x=clamp(p.pos.x,70.0,W-70.0); p.pos.y=clamp(p.pos.y,120.0,H-70.0)
-  if owner==null and p.pos.distance_to(ball_pos)<38.0: owner=p
+   target=p.home.lerp(ball_pos,0.08)
+  var dir:=p.pos.direction_to(target); var speed:=5.1 if p.team==0 else 5.4
+  p.pos+=dir*speed*delta
+  p.pos.x=clamp(p.pos.x,-20.0,20.0); p.pos.z=clamp(p.pos.z,-10.5,10.5)
+  if owner==null and p.pos.distance_to(ball_pos)<1.1: owner=p
   if owner==p:
-   var goal:=Vector2(W-35,H/2.0) if p.team==0 else Vector2(35,H/2.0)
-   ball_pos=p.pos+p.pos.direction_to(goal)*30.0
-   if p.pos.distance_to(goal)<330.0 and randf()<delta*0.8: ball_vel=p.pos.direction_to(goal)*BALL_SPEED; owner=null
+   var goal:=Vector3(21.5,0,0) if p.team==0 else Vector3(-21.5,0,0)
+   ball_pos=p.pos+p.pos.direction_to(goal)*1.0
+   if p.pos.distance_to(goal)<9.0 and p.cooldown<=0:
+    ball_velocity=p.pos.direction_to(goal)*BALL_SPEED; owner=null; p.cooldown=1.4
 
-func closest_player(team: int) -> Player:
+func closest_player(team:int) -> Player:
  var arr:=pakistan if team==0 else opponents
- var best: Player=arr[0]; var dist: float=best.pos.distance_to(ball_pos)
+ var best:Player=arr[0]; var dist:float=best.pos.distance_to(ball_pos)
  for p in arr:
-  var d: float=p.pos.distance_to(ball_pos)
+  var d:float=p.pos.distance_to(ball_pos)
   if d<dist: dist=d; best=p
  return best
 
-func update_ball(delta: float) -> void:
+func update_ball(delta:float) -> void:
  if owner!=null: return
- ball_pos+=ball_vel*delta; ball_vel=ball_vel.move_toward(Vector2.ZERO,900.0*delta)
- if ball_pos.y<105.0 or ball_pos.y>H-45.0: ball_vel.y*=-0.8
- if ball_pos.x<35.0 or ball_pos.x>W-35.0: ball_vel.x*=-0.8
- ball_pos.y=clamp(ball_pos.y,105.0,H-45.0); ball_pos.x=clamp(ball_pos.x,35.0,W-35.0)
+ ball_pos+=ball_velocity*delta
+ ball_velocity=ball_velocity.move_toward(Vector3.ZERO,20.0*delta)
+ if abs(ball_pos.z)>11.6: ball_velocity.z*=-0.75
+ ball_pos.z=clamp(ball_pos.z,-11.6,11.6)
 
 func check_goal() -> void:
- if ball_pos.x<28.0 and abs(ball_pos.y-H/2.0)<120.0: score[1]+=1; kickoff("OPPONENT SCORES")
- elif ball_pos.x>W-28.0 and abs(ball_pos.y-H/2.0)<120.0: score[0]+=1; kickoff("PAKISTAN SCORES!")
+ if ball_pos.x<-22.0 and abs(ball_pos.z)<3.2:
+  score[1]+=1; kickoff("OPPONENT SCORES")
+ elif ball_pos.x>22.0 and abs(ball_pos.z)<3.2:
+  score[0]+=1; kickoff("PAKISTAN SCORES!")
+ elif abs(ball_pos.x)>23.5:
+  ball_velocity.x*=-0.8; ball_pos.x=clamp(ball_pos.x,-23.5,23.5)
 
-func kickoff(text: String) -> void:
- message=text; message_time=2.0; ball_pos=Vector2(W/2.0,H/2.0); ball_vel=Vector2.ZERO; owner=null
+func kickoff(text:String) -> void:
+ message=text; message_time=2.0; ball_pos=Vector3.ZERO; ball_velocity=Vector3.ZERO; owner=null
  for p in pakistan: p.pos=p.home
  for p in opponents: p.pos=p.home
 
-func _input(event: InputEvent) -> void:
- if event is InputEventKey and event.pressed and not event.echo:
-  if event.keycode==KEY_SPACE: shoot()
-  elif event.keycode==KEY_E: pass_ball()
-  elif event.keycode==KEY_TAB: switch_player()
-  elif event.keycode==KEY_R and finished: reset_match()
- if event is InputEventScreenTouch:
-  touch_active=event.pressed
-  if event.pressed: touch_start=event.position
-  else: touch_dir=Vector2.ZERO
- if event is InputEventScreenDrag and touch_active: touch_dir=(event.position-touch_start).limit_length(80.0)/80.0
-
-func shoot() -> void:
- if owner==controlled:
-  var d:=input_dir(); if d.length()<0.1: d=Vector2.RIGHT
-  ball_vel=d*BALL_SPEED; owner=null
+func shoot_ball() -> void:
+ if owner!=controlled: return
+ var d:=get_move_dir()
+ if d.length()<0.1: d=Vector3.RIGHT
+ ball_velocity=d*BALL_SPEED; owner=null
 
 func pass_ball() -> void:
  if owner!=controlled: return
  var mate:=nearest_teammate()
- if mate!=null: ball_vel=controlled.pos.direction_to(mate.pos)*PASS_SPEED; owner=null
+ if mate!=null:
+  ball_velocity=controlled.pos.direction_to(mate.pos)*PASS_SPEED; owner=null
 
-func nearest_teammate() -> Player:
- var best: Player=null; var dist: float=INF
+func nearest_teammate()->Player:
+ var best:Player=null; var dist:float=INF
  for p in pakistan:
   if p==controlled: continue
-  var d: float=controlled.pos.distance_to(p.pos)
+  var d:=controlled.pos.distance_to(p.pos)
   if d<dist: dist=d; best=p
  return best
 
 func switch_player() -> void:
- var idx:=pakistan.find(controlled); controlled.active=false; idx=(idx+1)%pakistan.size(); controlled=pakistan[idx]; controlled.active=true
- if owner!=null and owner.team==0: owner=controlled
+ var idx:=pakistan.find(controlled)
+ controlled.active=false; idx=(idx+1)%pakistan.size(); controlled=pakistan[idx]; controlled.active=true
 
-func _draw() -> void:
- draw_rect(Rect2(0,0,W,H),Color("111111")); draw_rect(Rect2(35,105,W-70,H-145),Color("246b45")); draw_rect(Rect2(35,105,W-70,H-145),Color.WHITE,false,5)
- draw_line(Vector2(W/2,105),Vector2(W/2,H-40),Color.WHITE,3); draw_circle(Vector2(W/2,(H+65)/2),90,Color(1,1,1,0.03)); draw_arc(Vector2(W/2,(H+65)/2),90,0,TAU,64,Color.WHITE,3)
- draw_rect(Rect2(35,245,120,210),Color.WHITE,false,3); draw_rect(Rect2(W-155,245,120,210),Color.WHITE,false,3)
- for p in pakistan: draw_player(p,Color("16a34a"))
- for p in opponents: draw_player(p,Color("d43b3b"))
- draw_circle(ball_pos,11,Color.WHITE)
- draw_string(ThemeDB.fallback_font,Vector2(42,48),"STREET FOOTBALL: PAKISTAN",HORIZONTAL_ALIGNMENT_LEFT,-1,26,Color.WHITE)
- draw_string(ThemeDB.fallback_font,Vector2(570,52),"%d  -  %d"%[score[0],score[1]],HORIZONTAL_ALIGNMENT_LEFT,-1,34,Color.WHITE)
- draw_string(ThemeDB.fallback_font,Vector2(1090,48),format_time(time_left),HORIZONTAL_ALIGNMENT_LEFT,-1,26,Color.WHITE)
- draw_string(ThemeDB.fallback_font,Vector2(42,78),"WASD / ARROWS Move   SHIFT Sprint   SPACE Shoot   E Pass   TAB Switch",HORIZONTAL_ALIGNMENT_LEFT,-1,16,Color(0.8,0.8,0.8))
- if OS.has_feature("mobile") or touch_active:
-  draw_circle(Vector2(125,600),78,Color(0,0,0,0.45)); draw_circle(Vector2(125,600)+touch_dir*45,30,Color(0.3,0.7,1,0.8)); draw_circle(Vector2(1110,590),48,Color(0.8,0.15,0.1,0.65)); draw_string(ThemeDB.fallback_font,Vector2(1080,598),"SHOOT",HORIZONTAL_ALIGNMENT_LEFT,-1,16,Color.WHITE)
- if message_time>0 or finished:
-  draw_rect(Rect2(340,280,600,120),Color(0,0,0,0.72)); draw_string(ThemeDB.fallback_font,Vector2(450,350),message,HORIZONTAL_ALIGNMENT_LEFT,-1,32,Color.WHITE)
-  if finished: draw_string(ThemeDB.fallback_font,Vector2(450,385),"Press R to play again",HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color(0.8,0.8,0.8))
+func _input(event:InputEvent)->void:
+ if event is InputEventKey and event.pressed and not event.echo:
+  if event.keycode==KEY_SPACE: shoot_ball()
+  elif event.keycode==KEY_E: pass_ball()
+  elif event.keycode==KEY_TAB: switch_player()
+  elif event.keycode==KEY_R and finished: reset_match()
+ if event is InputEventScreenTouch:
+  if event.position.distance_to(joystick_center)<120:
+   joystick_active=event.pressed
+   if not event.pressed: joystick_vector=Vector2.ZERO
+   else: joystick_vector=(event.position-joystick_center).limit_length(80)/80
+ if event is InputEventScreenDrag and joystick_active:
+  joystick_vector=(event.position-joystick_center).limit_length(80)/80
 
-func draw_player(p: Player,c: Color) -> void:
- draw_circle(p.pos+Vector2(0,4),23,Color(0,0,0,0.35)); draw_circle(p.pos,20,c); draw_circle(p.pos+Vector2(0,-15),9,Color("f2c29b"))
- if p.active: draw_arc(p.pos,28,0,TAU,32,Color.WHITE,4)
- draw_string(ThemeDB.fallback_font,p.pos+Vector2(-30,38),p.pname,HORIZONTAL_ALIGNMENT_CENTER,60,12,Color.WHITE)
+func update_visuals()->void:
+ for p in pakistan+opponents:
+  if is_instance_valid(p.node):
+   p.node.position=p.pos
+   p.node.scale=Vector3.ONE*(1.08 if p.active else 1.0)
+   if p.active: p.node.rotation.y=sin(Time.get_ticks_msec()/180.0)*0.03
+ if is_instance_valid(ball_node):
+  ball_node.position=ball_pos+Vector3(0,0.42,0)
+  ball_node.rotate_z(0.08)
 
-func format_time(t: float) -> String:
+func update_hud()->void:
+ score_label.text="%d  -  %d"%[score[0],score[1]]
+ timer_label.text=format_time(time_left)
+ if finished:
+  message_label.text="FULL TIME\n%d - %d\nPress R to play again"%[score[0],score[1]]
+ elif message_time>0:
+  message_label.text=message
+ else:
+  message_label.text=""
+
+func format_time(t:float)->String:
  return "%02d:%02d"%[int(t)/60,int(t)%60]
