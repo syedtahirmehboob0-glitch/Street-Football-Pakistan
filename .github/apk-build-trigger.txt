@@ -1,0 +1,1 @@
+Trigger fresh Android APK build using the fixed Gradle-template workflow.
