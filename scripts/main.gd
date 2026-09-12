@@ -315,7 +315,7 @@ func show_levels() -> void:
 	info_root.visible = false
 
 func select_level(index: int) -> void:
-	current_level = clampi(index, 0, LEVEL_NAMES.size() - 1)
+	current_level = index
 	build_scenery(current_level)
 	start_match()
 
@@ -325,28 +325,37 @@ func start_match() -> void:
 	level_root.visible = false
 	info_root.visible = false
 	match_root.visible = true
-	build_scenery(current_level)
 	reset_match()
 
 func show_team() -> void:
-	show_info("MY TEAM", "AYAAN • Captain\nHAMZA • Speedster\nDANIYAL • Sniper\nSHAHZAIB • Playmaker\nAKBAR • Defender\nSAAD • Goalkeeper")
-
-func show_shop() -> void:
-	show_info("SHOP", "COINS: %d\n\nGREEN STREET KIT — 250\nGOLDEN BALL — 350\nNIGHT BOOTS — 400\n\nCosmetics only." % coins)
-
-func show_settings() -> void:
-	show_info("SETTINGS", "ANDROID PERFORMANCE\n\nCompatibility renderer\nLow-poly procedural 3D\nOffline save\nTouch + keyboard controls")
-
-func show_info(title: String, body: String) -> void:
 	game_screen = "info"
 	menu_root.visible = false
 	match_root.visible = false
 	level_root.visible = false
 	info_root.visible = true
+	set_info("MY TEAM", "AYYAN • BALANCED CAPTAIN\nHAMZA • SPEEDSTER\nDANIYAL • STRIKER\nSHAHZAB • PLAYMAKER\n\nSWITCH PLAYERS DURING MATCHES WITH SWITCH.")
+
+func show_shop() -> void:
+	game_screen = "info"
+	menu_root.visible = false
+	match_root.visible = false
+	level_root.visible = false
+	info_root.visible = true
+	set_info("SHOP", "COINS: %d\n\nCOSMETICS AND REWARDED-AD BONUSES\nARE RESERVED FOR THE NEXT RELEASE.\n\nNO PAY-TO-WIN UPGRADES.")
+
+func show_settings() -> void:
+	game_screen = "info"
+	menu_root.visible = false
+	match_root.visible = false
+	level_root.visible = false
+	info_root.visible = true
+	set_info("SETTINGS", "STREET FOOTBALL: PAKISTAN\nANDROID LANDSCAPE\nOFFLINE CORE GAMEPLAY\n\nKEYBOARD TESTING: ARROWS / SHIFT / SPACE / Q / E")
+
+func set_info(title: String, body: String) -> void:
 	for child in info_root.get_children():
 		child.queue_free()
-	make_title(info_root, title, Vector2(0, 65), 38)
-	var body_label := make_label(info_root, body, Vector2(300, 180), 21, Color("#d7e3f0"), true)
+	make_title(info_root, title, Vector2(0, 55), 38)
+	var body_label := make_label(info_root, body, Vector2(300, 165), 22, Color("#d9e5f2"), true)
 	body_label.size = Vector2(680, 300)
 	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	make_button(info_root, "BACK", Vector2(540, 535), Vector2(200, 54), 18).pressed.connect(show_menu)
@@ -361,15 +370,15 @@ func reset_match() -> void:
 	move_vector = Vector2.ZERO
 	sprint_pressed = false
 	switch_cooldown = 0.0
-	var positions := [Vector3(-12, 0, 0), Vector3(-7, 0, -5), Vector3(-7, 0, 5)]
-	var names := ["Hamza", "Daniyal", "Shahzaib"]
+	var positions: Array[Vector3] = [Vector3(-12, 0, 0), Vector3(-7, 0, -5), Vector3(-7, 0, 5)]
+	var names: Array[String] = ["Hamza", "Daniyal", "Shahzaib"]
 	for i in range(3):
-		var p := Player.new(positions[i], 0, i, names[i])
+		var p: Player = Player.new(positions[i], 0, i, names[i])
 		pakistan.append(p)
 		p.node = create_player(p)
-	var enemy_positions := [Vector3(12, 0, 0), Vector3(7, 0, -5), Vector3(7, 0, 5)]
+	var enemy_positions: Array[Vector3] = [Vector3(12, 0, 0), Vector3(7, 0, -5), Vector3(7, 0, 5)]
 	for i in range(3):
-		var e := Player.new(enemy_positions[i], 1, i, "Opponent %d" % (i + 1))
+		var e: Player = Player.new(enemy_positions[i], 1, i, "Opponent %d" % (i + 1))
 		opponents.append(e)
 		e.node = create_player(e)
 	selected_player = clampi(selected_player, 0, 2)
@@ -471,18 +480,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			reset_match()
 
 func move_direction() -> Vector3:
-	var x := Input.get_axis("ui_left", "ui_right")
-	var z := Input.get_axis("ui_up", "ui_down")
-	var d := Vector3(x, 0, z)
+	var x: float = Input.get_axis("ui_left", "ui_right")
+	var z: float = Input.get_axis("ui_up", "ui_down")
+	var d: Vector3 = Vector3(x, 0.0, z)
 	if move_vector.length() > 0.05:
-		d = Vector3(move_vector.x, 0, move_vector.y)
+		d = Vector3(move_vector.x, 0.0, move_vector.y)
 	return d.normalized() if d.length() > 0.05 else Vector3.ZERO
 
 func update_human(delta: float) -> void:
 	if controlled == null or not is_instance_valid(controlled.node):
 		return
-	var d := move_direction()
-	var speed := SPRINT_SPEED if sprint_pressed or Input.is_key_pressed(KEY_SHIFT) else PLAYER_SPEED
+	var d: Vector3 = move_direction()
+	var speed: float = SPRINT_SPEED if sprint_pressed or Input.is_key_pressed(KEY_SHIFT) else PLAYER_SPEED
 	if d != Vector3.ZERO:
 		controlled.pos += d * speed * delta
 		controlled.pos.x = clampf(controlled.pos.x, -21.0, 21.0)
@@ -498,15 +507,15 @@ func update_ai(delta: float) -> void:
 		if p == controlled:
 			continue
 		p.cooldown = maxf(0.0, p.cooldown - delta)
-		var target := p.home
-		var nearest := closest_player(p.team)
+		var target: Vector3 = p.home
+		var nearest: Player = closest_player(p.team)
 		if ball_owner == null and nearest == p:
 			target = ball_pos
 		elif ball_owner != null and ball_owner.team == p.team:
 			target = p.home.lerp(ball_owner.pos, 0.3)
 		else:
 			target = p.home.lerp(ball_pos, 0.15)
-		var d := p.pos.direction_to(target)
+		var d: Vector3 = p.pos.direction_to(target)
 		if d.length() > 0.08:
 			p.pos += d * 4.8 * delta
 			p.pos.x = clampf(p.pos.x, -21.0, 21.0)
@@ -514,7 +523,7 @@ func update_ai(delta: float) -> void:
 		if ball_owner == null and p.pos.distance_to(ball_pos) < 1.25:
 			ball_owner = p
 		if ball_owner == p:
-			var goal := Vector3(23, 0, 0) if p.team == 0 else Vector3(-23, 0, 0)
+			var goal: Vector3 = Vector3(23, 0, 0) if p.team == 0 else Vector3(-23, 0, 0)
 			ball_pos = p.pos + p.pos.direction_to(goal) * 1.0
 			if p.pos.distance_to(goal) < 9.0 and p.cooldown <= 0.0:
 				ball_velocity = p.pos.direction_to(goal) * BALL_SPEED
@@ -525,10 +534,10 @@ func closest_player(team: int) -> Player:
 	var list: Array[Player] = pakistan if team == 0 else opponents
 	if list.is_empty():
 		return null
-	var best := list[0]
-	var best_d := best.pos.distance_to(ball_pos)
+	var best: Player = list[0]
+	var best_d: float = best.pos.distance_to(ball_pos)
 	for p in list:
-		var d := p.pos.distance_to(ball_pos)
+		var d: float = p.pos.distance_to(ball_pos)
 		if d < best_d:
 			best = p
 			best_d = d
@@ -558,37 +567,27 @@ func check_goal() -> void:
 		kickoff()
 	elif absf(ball_pos.x) > 23.0:
 		ball_pos.x = clampf(ball_pos.x, -22.5, 22.5)
-		ball_velocity.x *= -0.75
+		ball_velocity.x *= -0.7
 
 func kickoff() -> void:
+	for i in range(pakistan.size()):
+		pakistan[i].pos = pakistan[i].home
+	for i in range(opponents.size()):
+		opponents[i].pos = opponents[i].home
 	ball_pos = Vector3.ZERO
 	ball_velocity = Vector3.ZERO
 	ball_owner = controlled
-	for p in pakistan:
-		p.pos = p.home
-	for e in opponents:
-		e.pos = e.home
-
-func shoot_ball() -> void:
-	if finished or controlled == null or ball_owner != controlled:
-		return
-	var d := move_direction()
-	if d == Vector3.ZERO:
-		d = Vector3.RIGHT
-	ball_velocity = d * BALL_SPEED
-	ball_owner = null
-	message = "SHOOT!"
-	message_time = 0.5
+	save_game()
 
 func pass_ball() -> void:
 	if finished or controlled == null or ball_owner != controlled:
 		return
 	var teammate: Player = null
-	var best := 9999.0
+	var best: float = 9999.0
 	for p in pakistan:
 		if p == controlled:
 			continue
-		var d := controlled.pos.distance_to(p.pos)
+		var d: float = controlled.pos.distance_to(p.pos)
 		if d < best:
 			best = d
 			teammate = p
@@ -597,6 +596,15 @@ func pass_ball() -> void:
 	ball_velocity = controlled.pos.direction_to(teammate.pos) * PASS_SPEED
 	ball_owner = null
 	message = "PASS"
+	message_time = 0.5
+
+func shoot_ball() -> void:
+	if finished or controlled == null or ball_owner != controlled:
+		return
+	var goal: Vector3 = Vector3(23, 0, 0)
+	ball_velocity = controlled.pos.direction_to(goal) * BALL_SPEED
+	ball_owner = null
+	message = "SHOT!"
 	message_time = 0.5
 
 func switch_player() -> void:
@@ -616,32 +624,33 @@ func update_visuals() -> void:
 		if is_instance_valid(e.node):
 			e.node.position = e.pos
 	if is_instance_valid(ball_node):
-		ball_node.position = ball_pos + Vector3(0, 0.48, 0)
+		ball_node.position = ball_pos + Vector3(0, 0.45, 0)
 
 func update_hud() -> void:
-	if score_label == null:
-		return
-	score_label.text = "%d  -  %d" % [score[0], score[1]]
-	var total := int(ceil(time_left))
-	timer_label.text = "%02d:%02d" % [total / 60, total % 60]
-	level_label.text = LEVEL_NAMES[current_level]
-	location_label.text = LANDMARK_NAMES[current_level]
-	message_label.text = message if message_time > 0.0 else ""
+	if score_label != null:
+		score_label.text = "%d  -  %d" % [score[0], score[1]]
+	if timer_label != null:
+		var total_seconds: int = int(ceil(time_left))
+		timer_label.text = "%02d:%02d" % [total_seconds / 60, total_seconds % 60]
+	if level_label != null:
+		level_label.text = LEVEL_NAMES[current_level]
+	if location_label != null:
+		location_label.text = LANDMARK_NAMES[current_level]
+	if message_label != null:
+		message_label.text = message if message_time > 0.0 else ""
+
+func save_game() -> void:
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file != null:
+		file.store_var({"coins": coins, "level": current_level})
 
 func load_save() -> void:
 	if not FileAccess.file_exists(SAVE_PATH):
 		return
-	var f := FileAccess.open(SAVE_PATH, FileAccess.READ)
-	if f == null:
+	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if file == null:
 		return
-	var data = f.get_var()
+	var data: Variant = file.get_var()
 	if data is Dictionary:
-		coins = int(data.get("coins", 500))
-		selected_player = clampi(int(data.get("selected_player", 0)), 0, 2)
-	f.close()
-
-func save_game() -> void:
-	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
-	if f != null:
-		f.store_var({"coins": coins, "selected_player": selected_player})
-		f.close()
+		coins = int(data.get("coins", coins))
+		current_level = clampi(int(data.get("level", current_level)), 0, LEVEL_NAMES.size() - 1)
