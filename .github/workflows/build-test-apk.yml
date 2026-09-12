@@ -98,7 +98,9 @@ jobs:
               s = s.replace(old, new, 1)
           p.write_text(s)
           PY
-          sed -i 's/^export_path=".*"$/export_path=""/' export_presets.cfg
+          # Godot validates the Android preset's export_path even when an output path is supplied on the CLI.
+          # Keep a real .apk path in the preset so the Android exporter accepts the preset.
+          sed -i 's|^export_path=".*"$|export_path="build/Street-Football-Pakistan-debug.apk"|' export_presets.cfg
 
       - name: Godot project validation
         run: godot --headless --editor --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --quit
@@ -124,7 +126,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/build"
-          timeout 15m godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android" "build/Street-Football-Pakistan-debug.apk"
+          timeout 15m godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android"
           test -s "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
           file "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
 
