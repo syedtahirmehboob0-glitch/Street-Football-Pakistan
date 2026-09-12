@@ -10,8 +10,6 @@ env:
   GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-cache
   GRADLE_OPTS: -Dorg.gradle.daemon=true -Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dorg.gradle.configuration-cache=true
 
-auto_cancel: false
-
 jobs:
   build:
     runs-on: ubuntu-latest
