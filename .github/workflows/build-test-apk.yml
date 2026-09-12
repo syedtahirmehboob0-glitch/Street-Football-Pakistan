@@ -101,21 +101,22 @@ jobs:
               s = s.replace(old, new, 1)
           p.write_text(s)
           PY
-          grep -nE 'name="Android"|platform="Android"|export_path=|gradle_build/export_format|architectures/arm64-v8a' export_presets.cfg
+          grep -nE 'name="Android"|platform="Android"|export_path=|gradle_build/export_format|architectures/arm64-v8a|command_line/extra_args' export_presets.cfg
       - name: Godot project validation
         run: godot --headless --editor --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --quit
       - name: Export debug APK
         shell: bash
         run: |
           set -euo pipefail
-          rm -f game.apk
+          OUT="$GITHUB_WORKSPACE/game.apk"
+          rm -f "$OUT"
           rm -rf build
-          echo "Exporting Android APK using preset export_path=game.apk"
-          timeout 15m godot --headless --path "$GITHUB_WORKSPACE" --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android"
-          test -s game.apk
-          file game.apk
+          echo "Exporting Android APK to: $OUT"
+          timeout 15m godot --headless --verbose --path "$GITHUB_WORKSPACE" --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android" "$OUT"
+          test -s "$OUT"
+          file "$OUT"
           mkdir -p build
-          mv game.apk build/Street-Football-Pakistan-debug.apk
+          mv "$OUT" build/Street-Football-Pakistan-debug.apk
           test -s build/Street-Football-Pakistan-debug.apk
           file build/Street-Football-Pakistan-debug.apk
       - name: Upload APK artifact
