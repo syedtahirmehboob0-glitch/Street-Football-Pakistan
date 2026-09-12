@@ -70,6 +70,13 @@ jobs:
           sed -i 's/^export_path=".*"$/export_path=""/' export_presets.cfg
       - name: Godot project validation
         run: godot --headless --editor --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --quit
+      - name: Install Godot Android Gradle build template
+        shell: bash
+        run: |
+          set -e
+          godot --headless --editor --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --install-android-build-template
+          test -d android
+          test -f android/build.gradle || test -f android/build.gradle.kts
       - name: Export debug APK
         shell: bash
         run: |
