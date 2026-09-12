@@ -97,7 +97,7 @@ func build_overlay() -> void:
 	overlay = Control.new()
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	game.match_root.add_child(overlay)
+	game.ui.add_child(overlay)
 
 	var title: Label = Label.new()
 	title.text = "STREET FOOTBALL • PAKISTAN"
@@ -119,14 +119,14 @@ func build_overlay() -> void:
 	var pass: Button = make_action("PASS", Vector2(890.0, 610.0), Vector2(105.0, 65.0), 16)
 	pass.pressed.connect(game.pass_ball)
 	var through: Button = make_action("THROUGH", Vector2(1000.0, 545.0), Vector2(120.0, 65.0), 14)
-	through.pressed.connect(game.through_ball)
+	through.pressed.connect(do_through)
 	var dash: Button = make_action("DASH", Vector2(1040.0, 625.0), Vector2(105.0, 58.0), 15)
 	dash.button_down.connect(_set_dash.bind(true))
 	dash.button_up.connect(_set_dash.bind(false))
 	var switch_player: Button = make_action("SWITCH", Vector2(785.0, 625.0), Vector2(105.0, 58.0), 14)
 	switch_player.pressed.connect(game.switch_player)
 	var press: Button = make_action("PRESS", Vector2(890.0, 530.0), Vector2(100.0, 58.0), 14)
-	press.pressed.connect(game.pressure)
+	press.pressed.connect(do_pressure)
 
 	map = MiniMap.new()
 	map.game = game
@@ -160,6 +160,49 @@ func _on_stick(value: Vector2) -> void:
 
 func _set_dash(value: bool) -> void:
 	game.sprinting = value
+
+func do_through() -> void:
+	if game.finished or game.controlled == null or game.ball_owner != game.controlled:
+		return
+	var target: Node = nearest_teammate()
+	if target == null:
+		return
+	var direction: Vector3 = game.controlled.pos.direction_to(target.pos + Vector3(4.0, 0.0, 0.0))
+	game.ball_velocity = direction * 18.0
+	game.ball_owner = null
+
+func do_pressure() -> void:
+	if game.finished or game.controlled == null:
+		return
+	var nearest: Node = nearest_opponent()
+	if nearest == null:
+		return
+	var direction: Vector3 = game.controlled.pos.direction_to(nearest.pos)
+	game.controlled.pos += direction * 0.65
+	if game.ball_owner == nearest and game.controlled.pos.distance_to(nearest.pos) < 1.7:
+		game.ball_owner = game.controlled
+
+func nearest_teammate() -> Node:
+	var best: Node = null
+	var best_distance: float = 9999.0
+	for p in game.home:
+		if p == game.controlled:
+			continue
+		var d: float = game.controlled.pos.distance_to(p.pos)
+		if d < best_distance:
+			best_distance = d
+			best = p
+	return best
+
+func nearest_opponent() -> Node:
+	var best: Node = null
+	var best_distance: float = 9999.0
+	for p in game.away:
+		var d: float = game.controlled.pos.distance_to(p.pos)
+		if d < best_distance:
+			best_distance = d
+			best = p
+	return best
 
 func apply_visual_polish() -> void:
 	for child: Node in game.ui.get_children():
