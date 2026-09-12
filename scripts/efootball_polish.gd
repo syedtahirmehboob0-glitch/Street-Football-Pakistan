@@ -98,7 +98,6 @@ func build_overlay() -> void:
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	game.ui.add_child(overlay)
-
 	var title: Label = Label.new()
 	title.text = "STREET FOOTBALL • PAKISTAN"
 	title.position = Vector2(455.0, 7.0)
@@ -107,13 +106,11 @@ func build_overlay() -> void:
 	title.add_theme_font_size_override("font_size", 11)
 	title.add_theme_color_override("font_color", Color("#b9cce0"))
 	overlay.add_child(title)
-
 	stick = MobileStick.new()
 	stick.position = Vector2(28.0, 500.0)
 	stick.size = Vector2(170.0, 170.0)
 	stick.moved.connect(_on_stick)
 	overlay.add_child(stick)
-
 	var shoot: Button = make_action("SHOOT", Vector2(1090.0, 430.0), Vector2(145.0, 88.0), 19)
 	shoot.pressed.connect(game.shoot_ball)
 	var pass: Button = make_action("PASS", Vector2(890.0, 610.0), Vector2(105.0, 65.0), 16)
@@ -127,7 +124,6 @@ func build_overlay() -> void:
 	switch_player.pressed.connect(game.switch_player)
 	var press: Button = make_action("PRESS", Vector2(890.0, 530.0), Vector2(100.0, 58.0), 14)
 	press.pressed.connect(do_pressure)
-
 	map = MiniMap.new()
 	map.game = game
 	map.position = Vector2(525.0, 580.0)
@@ -164,7 +160,7 @@ func _set_dash(value: bool) -> void:
 func do_through() -> void:
 	if game.finished or game.controlled == null or game.ball_owner != game.controlled:
 		return
-	var target: Node = nearest_teammate()
+	var target: Variant = nearest_teammate()
 	if target == null:
 		return
 	var direction: Vector3 = game.controlled.pos.direction_to(target.pos + Vector3(4.0, 0.0, 0.0))
@@ -174,7 +170,7 @@ func do_through() -> void:
 func do_pressure() -> void:
 	if game.finished or game.controlled == null:
 		return
-	var nearest: Node = nearest_opponent()
+	var nearest: Variant = nearest_opponent()
 	if nearest == null:
 		return
 	var direction: Vector3 = game.controlled.pos.direction_to(nearest.pos)
@@ -182,8 +178,8 @@ func do_pressure() -> void:
 	if game.ball_owner == nearest and game.controlled.pos.distance_to(nearest.pos) < 1.7:
 		game.ball_owner = game.controlled
 
-func nearest_teammate() -> Node:
-	var best: Node = null
+func nearest_teammate() -> Variant:
+	var best: Variant = null
 	var best_distance: float = 9999.0
 	for p in game.home:
 		if p == game.controlled:
@@ -194,8 +190,8 @@ func nearest_teammate() -> Node:
 			best = p
 	return best
 
-func nearest_opponent() -> Node:
-	var best: Node = null
+func nearest_opponent() -> Variant:
+	var best: Variant = null
 	var best_distance: float = 9999.0
 	for p in game.away:
 		var d: float = game.controlled.pos.distance_to(p.pos)
