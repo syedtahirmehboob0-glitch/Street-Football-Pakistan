@@ -13,7 +13,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Install Godot 4.3
         shell: bash
         run: |
@@ -21,7 +20,6 @@ jobs:
           unzip -q Godot_v4.3-stable_linux.x86_64.zip
           sudo mv Godot_v4.3-stable_linux.x86_64 /usr/local/bin/godot
           sudo chmod +x /usr/local/bin/godot
-
       - name: Install Godot export templates
         shell: bash
         run: |
@@ -29,16 +27,13 @@ jobs:
           mkdir -p "$HOME/.local/share/godot/export_templates/4.3.stable"
           unzip -q Godot_v4.3-stable_export_templates.tpz
           cp -r templates/* "$HOME/.local/share/godot/export_templates/4.3.stable/"
-
       - name: Install Android SDK
         uses: android-actions/setup-android@v3
-
       - name: Install Android SDK packages
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-
       - name: Configure headless Android export
         shell: bash
         run: |
@@ -46,9 +41,6 @@ jobs:
           JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
           echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_SDK_PATH=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$RUNNER_TEMP/debug.keystore" >> "$GITHUB_ENV"
-          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
-          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/godot-editor"
           keytool -genkeypair -v -keystore "$RUNNER_TEMP/debug.keystore" -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" >/dev/null 2>&1
           cat > "$RUNNER_TEMP/godot-editor/editor_settings-4.tres" <<EOF
@@ -61,17 +53,14 @@ jobs:
           export/android/debug_keystore_user = "androiddebugkey"
           export/android/debug_keystore_pass = "android"
           EOF
-
       - name: Godot project validation
         run: godot --headless --editor --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --quit
-
       - name: Export debug APK
         shell: bash
         run: |
-          mkdir -p build
-          godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android"
-          test -s build/Street-Football-Pakistan-debug.apk
-
+          mkdir -p "$GITHUB_WORKSPACE/build"
+          godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android" "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
+          test -s "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
