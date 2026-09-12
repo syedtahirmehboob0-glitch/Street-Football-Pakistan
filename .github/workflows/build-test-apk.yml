@@ -98,8 +98,6 @@ jobs:
               s = s.replace(old, new, 1)
           p.write_text(s)
           PY
-          # Godot validates the Android preset's export_path even when an output path is supplied on the CLI.
-          # Keep a real .apk path in the preset so the Android exporter accepts the preset.
           sed -i 's|^export_path=".*"$|export_path="build/Street-Football-Pakistan-debug.apk"|' export_presets.cfg
 
       - name: Godot project validation
@@ -135,3 +133,5 @@ jobs:
         with:
           name: Street-Football-Pakistan-debug-apk
           path: build/Street-Football-Pakistan-debug.apk
+
+      # Triggered by ChatGPT to produce the installable APK.
