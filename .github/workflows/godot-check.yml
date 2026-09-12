@@ -1,0 +1,28 @@
+name: Godot validation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  godot-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Godot 4.3
+        shell: bash
+        run: |
+          set -e
+          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip
+          unzip -q Godot_v4.3-stable_linux.x86_64.zip
+          chmod +x Godot_v4.3-stable_linux.x86_64
+
+      - name: Import project and check scripts
+        run: ./Godot_v4.3-stable_linux.x86_64 --headless --editor --path . --quit
+
+      - name: Run game headless
+        run: timeout 20s ./Godot_v4.3-stable_linux.x86_64 --headless --path . --quit-after 10
