@@ -1,0 +1,77 @@
+name: Unreal Engine Android Build
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'UnrealEngineBuild/**'
+      - '.github/workflows/unreal-android-build.yml'
+
+jobs:
+  build-unreal-android:
+    # Requires a self-hosted machine with UE 5.8 and Android toolchain installed.
+    runs-on: [self-hosted, unreal-engine, android]
+    defaults:
+      run:
+        working-directory: UnrealEngineBuild
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Unreal Engine
+        shell: pwsh
+        run: |
+          if (-not $env:UE_ROOT) { throw 'UE_ROOT is not configured on the runner.' }
+          $editor = Join-Path $env:UE_ROOT 'Engine/Binaries/Win64/UnrealEditor-Cmd.exe'
+          if (-not (Test-Path $editor)) { throw "UnrealEditor-Cmd.exe not found at $editor" }
+          & $editor -version
+
+      - name: Generate project files
+        shell: pwsh
+        run: |
+          $uproject = Join-Path (Get-Location) 'StreetFootballPakistan.uproject'
+          $editor = Join-Path $env:UE_ROOT 'Engine/Binaries/Win64/UnrealEditor-Cmd.exe'
+          & $editor $uproject -run=GenerateProjectFiles -NoLogTimes
+
+      - name: Build Android Shipping APK
+        shell: pwsh
+        run: |
+          $uproject = Join-Path (Get-Location) 'StreetFootballPakistan.uproject'
+          $runUAT = Join-Path $env:UE_ROOT 'Engine/Build/BatchFiles/RunUAT.bat'
+          & $runUAT BuildCookRun `
+            -project=$uproject `
+            -noP4 `
+            -build `
+            -cook `
+            -stage `
+            -pak `
+            -prereqs `
+            -package `
+            -archive `
+            -archivedirectory=$(Join-Path (Get-Location) 'Artifacts') `
+            -platform=Android `
+            -clientconfig=Shipping `
+            -utf8output
+
+      - name: Locate APK
+        shell: pwsh
+        run: |
+          $apk = Get-ChildItem -Path Artifacts -Recurse -Filter '*.apk' | Select-Object -First 1
+          if (-not $apk) { throw 'No APK was produced.' }
+          "APK=$($apk.FullName)" | Out-File build.env
+
+      - name: Verify APK signature
+        shell: pwsh
+        run: |
+          $apk = Get-ChildItem -Path Artifacts -Recurse -Filter '*.apk' | Select-Object -First 1
+          if (-not $apk) { throw 'APK missing.' }
+          $apksigner = Get-Command apksigner -ErrorAction SilentlyContinue
+          if (-not $apksigner) { throw 'apksigner is not available on the Unreal runner.' }
+          & $apksigner.Source verify --verbose $apk.FullName
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StreetFootballPakistan-Unreal-Android
+          path: UnrealEngineBuild/Artifacts/**/*.apk
+          if-no-files-found: error
