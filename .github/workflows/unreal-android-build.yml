@@ -9,7 +9,7 @@ on:
 
 jobs:
   build-unreal-android:
-    # Requires a self-hosted machine with UE 5.8 and Android toolchain installed.
+    # A real UE 5.8 + Android toolchain is required on this self-hosted runner.
     runs-on: [self-hosted, unreal-engine, android]
     defaults:
       run:
@@ -18,13 +18,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify Unreal Engine
+      - name: Verify Unreal and Android environment
         shell: pwsh
         run: |
           if (-not $env:UE_ROOT) { throw 'UE_ROOT is not configured on the runner.' }
           $editor = Join-Path $env:UE_ROOT 'Engine/Binaries/Win64/UnrealEditor-Cmd.exe'
+          $runUAT = Join-Path $env:UE_ROOT 'Engine/Build/BatchFiles/RunUAT.bat'
           if (-not (Test-Path $editor)) { throw "UnrealEditor-Cmd.exe not found at $editor" }
+          if (-not (Test-Path $runUAT)) { throw "RunUAT.bat not found at $runUAT" }
           & $editor -version
+          if ($LASTEXITCODE -ne 0) { throw 'Unreal Engine version check failed.' }
+          if (-not (Get-Command adb -ErrorAction SilentlyContinue)) { throw 'adb is not available on PATH.' }
+          if (-not (Get-Command apksigner -ErrorAction SilentlyContinue)) { throw 'apksigner is not available on PATH.' }
+          adb version
+          apksigner version
+          if (-not $env:ANDROID_HOME -and -not $env:ANDROID_SDK_ROOT) { throw 'ANDROID_HOME/ANDROID_SDK_ROOT is not configured.' }
+          if (-not $env:JAVA_HOME) { throw 'JAVA_HOME is not configured.' }
+          if (-not $env:NDKROOT) { Write-Host 'NDKROOT is not set; UE Turnkey may provide the configured NDK.' }
 
       - name: Generate project files
         shell: pwsh
@@ -32,12 +42,14 @@ jobs:
           $uproject = Join-Path (Get-Location) 'StreetFootballPakistan.uproject'
           $editor = Join-Path $env:UE_ROOT 'Engine/Binaries/Win64/UnrealEditor-Cmd.exe'
           & $editor $uproject -run=GenerateProjectFiles -NoLogTimes
+          if ($LASTEXITCODE -ne 0) { throw 'Unreal project-file generation failed.' }
 
       - name: Build Android Shipping APK
         shell: pwsh
         run: |
           $uproject = Join-Path (Get-Location) 'StreetFootballPakistan.uproject'
           $runUAT = Join-Path $env:UE_ROOT 'Engine/Build/BatchFiles/RunUAT.bat'
+          $archive = Join-Path (Get-Location) 'Artifacts'
           & $runUAT BuildCookRun `
             -project=$uproject `
             -noP4 `
@@ -48,28 +60,23 @@ jobs:
             -prereqs `
             -package `
             -archive `
-            -archivedirectory=$(Join-Path (Get-Location) 'Artifacts') `
+            -archivedirectory=$archive `
             -platform=Android `
             -clientconfig=Shipping `
             -utf8output
+          if ($LASTEXITCODE -ne 0) { throw 'Unreal Android Shipping build failed.' }
 
-      - name: Locate APK
+      - name: Locate and verify APK
         shell: pwsh
         run: |
           $apk = Get-ChildItem -Path Artifacts -Recurse -Filter '*.apk' | Select-Object -First 1
           if (-not $apk) { throw 'No APK was produced.' }
-          "APK=$($apk.FullName)" | Out-File build.env
+          & (Get-Command apksigner).Source verify --verbose --print-certs $apk.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed.' }
+          Get-FileHash $apk.FullName -Algorithm SHA256 | Format-List
+          "Verified APK: $($apk.FullName)"
 
-      - name: Verify APK signature
-        shell: pwsh
-        run: |
-          $apk = Get-ChildItem -Path Artifacts -Recurse -Filter '*.apk' | Select-Object -First 1
-          if (-not $apk) { throw 'APK missing.' }
-          $apksigner = Get-Command apksigner -ErrorAction SilentlyContinue
-          if (-not $apksigner) { throw 'apksigner is not available on the Unreal runner.' }
-          & $apksigner.Source verify --verbose $apk.FullName
-
-      - name: Upload APK artifact
+      - name: Upload verified APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: StreetFootballPakistan-Unreal-Android
