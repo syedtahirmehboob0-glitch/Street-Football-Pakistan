@@ -125,4 +125,4 @@ jobs:
           name: Street-Football-Pakistan-debug-apk
           path: build/Street-Football-Pakistan-debug.apk
 
-# Fresh Android export trigger after editor-settings-path fix.
+# Trigger fresh Android export.
