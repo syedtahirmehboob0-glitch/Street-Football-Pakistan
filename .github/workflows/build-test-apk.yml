@@ -18,7 +18,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Cache Godot and Android build resources
         uses: actions/cache@v4
         with:
@@ -32,7 +31,6 @@ jobs:
           key: android-godot-${{ env.GODOT_VERSION }}-${{ runner.os }}-${{ hashFiles('project.godot', 'export_presets.cfg', '.github/workflows/build-test-apk.yml') }}
           restore-keys: |
             android-godot-${{ env.GODOT_VERSION }}-${{ runner.os }}-
-
       - name: Install Godot
         shell: bash
         run: |
@@ -42,7 +40,6 @@ jobs:
           unzip -q Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
           sudo mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
           sudo chmod +x /usr/local/bin/godot
-
       - name: Install Godot export templates
         shell: bash
         run: |
@@ -53,17 +50,14 @@ jobs:
           mkdir -p "$T"
           unzip -q Godot_v${GODOT_VERSION}-stable_export_templates.tpz
           cp -r templates/* "$T/"
-
       - name: Install Android SDK
         uses: android-actions/setup-android@v3
-
       - name: Install Android SDK packages
         shell: bash
         run: |
           set -e
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-
       - name: Fix ADB daemon
         shell: bash
         run: |
@@ -74,7 +68,6 @@ jobs:
           adb start-server
           adb devices
           adb version
-
       - name: Configure headless Android export
         shell: bash
         run: |
@@ -87,7 +80,6 @@ jobs:
           keytool -genkeypair -v -keystore "$RUNNER_TEMP/debug.keystore" -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" >/dev/null 2>&1
           cat > "$RUNNER_TEMP/godot-editor/editor_settings-4.tres" <<EOF
           [gd_resource type="EditorSettings" format=3]
-
           [resource]
           export/android/android_sdk_path = "$ANDROID_HOME"
           export/android/java_sdk_path = "$JAVA_HOME"
@@ -95,7 +87,6 @@ jobs:
           export/android/debug_keystore_user = "androiddebugkey"
           export/android/debug_keystore_pass = "android"
           EOF
-
       - name: Prepare project for CI export
         shell: bash
         run: |
@@ -110,29 +101,23 @@ jobs:
               s = s.replace(old, new, 1)
           p.write_text(s)
           PY
-          echo "Android export preset:"
           grep -nE 'name="Android"|platform="Android"|export_path=|gradle_build/export_format|architectures/arm64-v8a' export_presets.cfg
-
       - name: Godot project validation
         run: godot --headless --editor --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --quit
-
       - name: Export debug APK
         shell: bash
         run: |
           set -euo pipefail
-          OUT="$GITHUB_WORKSPACE/game.apk"
-          rm -f "$OUT"
-          rm -rf "$GITHUB_WORKSPACE/build"
-          echo "Exporting Android APK to: $OUT"
-          test "${OUT##*.}" = "apk"
-          timeout 15m godot --headless --path "$GITHUB_WORKSPACE" --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android" "$OUT"
-          test -s "$OUT"
-          file "$OUT"
-          mkdir -p "$GITHUB_WORKSPACE/build"
-          mv "$OUT" "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
-          test -s "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
-          file "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
-
+          rm -f game.apk
+          rm -rf build
+          echo "Exporting Android APK using preset export_path=game.apk"
+          timeout 15m godot --headless --path "$GITHUB_WORKSPACE" --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android"
+          test -s game.apk
+          file game.apk
+          mkdir -p build
+          mv game.apk build/Street-Football-Pakistan-debug.apk
+          test -s build/Street-Football-Pakistan-debug.apk
+          file build/Street-Football-Pakistan-debug.apk
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
