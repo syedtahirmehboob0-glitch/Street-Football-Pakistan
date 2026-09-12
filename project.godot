@@ -1,5 +1,5 @@
 [application]
-config/name="Street Football: Pakistan"
+config/name="Street Football: Pakistan 3D"
 run/main_scene="res://Main.tscn"
 config/features=PackedStringArray("4.3")
 
@@ -13,3 +13,7 @@ window/stretch/mode="canvas_items"
 [rendering]
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+renderer/rendering_method.web="gl_compatibility"
+
+[physics]
+common/physics_ticks_per_second=60
