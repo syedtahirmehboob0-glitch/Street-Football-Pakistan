@@ -1,0 +1,35 @@
+name: Fix GDScript helper references
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix missing GDScript references
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/main.gd')
+          s = p.read_text()
+          s = s.replace('menu_root = make_screen(Color("#081522"))', 'menu_root = make_panel()')
+          s = s.replace('button(level_root, "BACK", Vector2(540, 515), Vector2(200, 52), 18)', 'make_button(level_root, "BACK", Vector2(540, 515), Vector2(200, 52), 18)')
+          s = s.replace('make_material(Color("#11a653") if p.team == 0 else Color("#d63232"))', 'material(Color("#11a653") if p.team == 0 else Color("#d63232"))')
+          s = s.replace('make_material(Color("#d99b74"))', 'material(Color("#d99b74"))')
+          s = s.replace('make_material(Color.WHITE)', 'material(Color.WHITE)')
+          s = s.replace('build_location_scenery(current_level)', 'build_scenery(current_level)')
+          p.write_text(s)
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/main.gd
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Fix missing GDScript helper references'
+          git push
