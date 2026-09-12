@@ -1,0 +1,66 @@
+name: Build and test Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fix strict GDScript inference
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/main.gd')
+          s = p.read_text()
+          s = s.replace('var d := Vector3(x, 0, z)', 'var d: Vector3 = Vector3(x, 0, z)')
+          s = s.replace('var d := p.pos.direction_to(target)', 'var d: Vector3 = p.pos.direction_to(target)')
+          p.write_text(s)
+          PY
+
+      - name: Install Godot 4.3
+        shell: bash
+        run: |
+          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip
+          unzip -q Godot_v4.3-stable_linux.x86_64.zip
+          sudo mv Godot_v4.3-stable_linux.x86_64 /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+
+      - name: Syntax check in Godot
+        run: godot --headless --path . --editor --quit
+
+      - name: Install Android export tools
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Export debug APK
+        run: |
+          mkdir -p build
+          godot --headless --path . --export-debug "Android" build/Street-Football-Pakistan-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Street-Football-Pakistan-debug-apk
+          path: build/Street-Football-Pakistan-debug.apk
+
+      - name: Commit strict-type fix
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/main.gd
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Fix strict GDScript type inference'
+          git push
