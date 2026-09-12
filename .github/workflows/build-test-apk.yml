@@ -136,7 +136,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/build"
-          timeout 15m godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android"
+          timeout 15m godot --headless --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --export-debug "Android" "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
           test -s "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
           file "$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
 
