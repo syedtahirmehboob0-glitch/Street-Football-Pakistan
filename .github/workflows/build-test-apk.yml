@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  GODOT_VERSION: 4.5.2
+  GODOT_VERSION: 4.4.1
   GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-cache
   GRADLE_OPTS: -Dorg.gradle.daemon=true -Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dorg.gradle.configuration-cache=true
 
@@ -33,7 +33,7 @@ jobs:
           restore-keys: |
             android-godot-${{ env.GODOT_VERSION }}-${{ runner.os }}-
 
-      - name: Install Godot 4.5.2
+      - name: Install Godot
         shell: bash
         run: |
           set -e
