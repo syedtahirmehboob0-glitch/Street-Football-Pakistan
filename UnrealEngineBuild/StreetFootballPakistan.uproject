@@ -1,0 +1,15 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.8",
+  "Category": "Games",
+  "Description": "Street Football Pakistan - Unreal Engine 5 Android rebuild",
+  "Modules": [
+    {
+      "Name": "StreetFootballPakistan",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "TargetPlatforms": ["Android"],
+  "Plugins": []
+}
