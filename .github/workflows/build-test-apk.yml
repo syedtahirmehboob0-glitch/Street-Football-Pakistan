@@ -116,6 +116,7 @@ jobs:
       - name: Godot project validation
         run: godot --headless --editor --path . --editor-settings-dir "$RUNNER_TEMP/godot-editor" --quit
 
+      # Force a fresh Android build after export-path and engine-version fixes.
       - name: Export debug APK
         shell: bash
         run: |
