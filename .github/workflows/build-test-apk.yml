@@ -64,6 +64,17 @@ jobs:
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
+      - name: Fix ADB daemon
+        shell: bash
+        run: |
+          set -e
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          adb kill-server >/dev/null 2>&1 || true
+          rm -f "$HOME/.android/adbkey" "$HOME/.android/adbkey.pub" 2>/dev/null || true
+          adb start-server
+          adb devices
+          adb version
+
       - name: Configure headless Android export
         shell: bash
         run: |
@@ -71,6 +82,7 @@ jobs:
           JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
           echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_SDK_PATH=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
           mkdir -p "$RUNNER_TEMP/godot-editor"
           keytool -genkeypair -v -keystore "$RUNNER_TEMP/debug.keystore" -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" >/dev/null 2>&1
           cat > "$RUNNER_TEMP/godot-editor/editor_settings-4.tres" <<EOF
