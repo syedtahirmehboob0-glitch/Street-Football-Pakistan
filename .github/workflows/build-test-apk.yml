@@ -60,7 +60,7 @@ jobs:
       - name: Install Android SDK packages
         shell: bash
         run: |
-          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          set -e
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Configure headless Android export
@@ -106,13 +106,15 @@ jobs:
         shell: bash
         run: |
           set -e
-          if [ -f android/build.gradle ] || [ -f android/build.gradle.kts ]; then
-            echo "Android Gradle project already cached."
-          else
-            T="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
-            test -f "$T/android_source.zip"
-            rm -rf android
-            unzip -q "$T/android_source.zip" -d .
+          T="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          test -f "$T/android_source.zip"
+          rm -rf android
+          mkdir -p android
+          unzip -q "$T/android_source.zip" -d android
+          if [ -d android/android ]; then
+            shopt -s dotglob
+            mv android/android/* android/
+            rmdir android/android
           fi
           test -f android/build.gradle || test -f android/build.gradle.kts
 
