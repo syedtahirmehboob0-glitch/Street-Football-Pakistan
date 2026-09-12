@@ -61,6 +61,7 @@ jobs:
         shell: bash
         run: |
           set -e
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Configure headless Android export
@@ -105,18 +106,23 @@ jobs:
       - name: Prepare Android Gradle build template
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
           T="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
-          test -f "$T/android_source.zip"
-          rm -rf android
-          mkdir -p android
-          unzip -q "$T/android_source.zip" -d android
-          if [ -d android/android ]; then
-            shopt -s dotglob
-            mv android/android/* android/
-            rmdir android/android
+          ZIP="$T/android_source.zip"
+          test -s "$ZIP"
+          rm -rf android android-template
+          mkdir -p android-template android
+          unzip -q "$ZIP" -d android-template
+          BUILD_FILE="$(find android-template -type f \( -name build.gradle -o -name build.gradle.kts \) -print -quit)"
+          if [ -z "$BUILD_FILE" ]; then
+            echo "ERROR: Gradle template extracted but no build.gradle/build.gradle.kts was found"
+            find android-template -maxdepth 4 -type f | head -80
+            exit 1
           fi
+          TEMPLATE_ROOT="$(dirname "$BUILD_FILE")"
+          cp -a "$TEMPLATE_ROOT"/. android/
           test -f android/build.gradle || test -f android/build.gradle.kts
+          echo "Gradle template prepared at android/"
 
       - name: Export debug APK
         shell: bash
