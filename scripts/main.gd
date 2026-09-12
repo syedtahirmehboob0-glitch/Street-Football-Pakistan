@@ -197,7 +197,7 @@ func create_ui() -> void:
 	screen_root = Control.new()
 	screen_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui.add_child(screen_root)
-	menu_root = make_screen(Color("#081522"))
+	menu_root = make_panel()
 	screen_root.add_child(menu_root)
 	make_title(menu_root, "STREET FOOTBALL\nPAKISTAN", Vector2(0, 55), 46)
 	make_label(menu_root, "REAL PAKISTAN LOCATIONS • 3D • OFFLINE", Vector2(0, 175), 20, Color("#c7d8ff"), true)
@@ -233,7 +233,7 @@ func create_ui() -> void:
 	for i in range(LEVEL_NAMES.size()):
 		var level_button := make_button(level_root, "%d  %s" % [i + 1, LEVEL_NAMES[i]], Vector2(430, 150 + i * 68), Vector2(420, 55), 18)
 		level_button.pressed.connect(select_level.bind(i))
-	button(level_root, "BACK", Vector2(540, 515), Vector2(200, 52), 18).pressed.connect(show_menu)
+	make_button(level_root, "BACK", Vector2(540, 515), Vector2(200, 52), 18).pressed.connect(show_menu)
 	level_root.visible = false
 	info_root = make_panel()
 	screen_root.add_child(info_root)
@@ -316,7 +316,7 @@ func show_levels() -> void:
 
 func select_level(index: int) -> void:
 	current_level = clampi(index, 0, LEVEL_NAMES.size() - 1)
-	build_location_scenery(current_level)
+	build_scenery(current_level)
 	start_match()
 
 func start_match() -> void:
@@ -325,7 +325,7 @@ func start_match() -> void:
 	level_root.visible = false
 	info_root.visible = false
 	match_root.visible = true
-	build_location_scenery(current_level)
+	build_scenery(current_level)
 	reset_match()
 
 func show_team() -> void:
@@ -390,7 +390,7 @@ func create_player(p: Player) -> Node3D:
 	capsule.height = 1.9
 	capsule.radial_segments = 12
 	body.mesh = capsule
-	body.material_override = make_material(Color("#11a653") if p.team == 0 else Color("#d63232"))
+	body.material_override = material(Color("#11a653") if p.team == 0 else Color("#d63232"))
 	body.position.y = 1.0
 	root.add_child(body)
 	var head := MeshInstance3D.new()
@@ -399,7 +399,7 @@ func create_player(p: Player) -> Node3D:
 	head_mesh.height = 0.72
 	head_mesh.radial_segments = 12
 	head.mesh = head_mesh
-	head.material_override = make_material(Color("#d99b74"))
+	head.material_override = material(Color("#d99b74"))
 	head.position.y = 2.2
 	root.add_child(head)
 	var number := Label3D.new()
@@ -421,7 +421,7 @@ func create_ball() -> void:
 	sphere.radial_segments = 16
 	sphere.rings = 8
 	ball_node.mesh = sphere
-	ball_node.material_override = make_material(Color.WHITE)
+	ball_node.material_override = material(Color.WHITE)
 	world_root.add_child(ball_node)
 
 func clear_players() -> void:
