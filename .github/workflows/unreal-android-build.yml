@@ -9,8 +9,10 @@ on:
 
 jobs:
   build-unreal-android:
-    # A real UE 5.8 + Android toolchain is required on this self-hosted runner.
-    runs-on: [self-hosted, unreal-engine, android]
+    # WarpBuild provides the Windows VM. The UE 5.8 + Android toolchain is expected
+    # to be supplied through the runner/environment configuration.
+    runs-on: warp-windows-latest-x64-32x
+    timeout-minutes: 240
     defaults:
       run:
         working-directory: UnrealEngineBuild
