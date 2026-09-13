@@ -105,30 +105,39 @@ jobs:
           grep -nE 'name="Android"|platform="Android"|export_path=|gradle_build/export_format|architectures/arm64-v8a|command_line/extra_args' export_presets.cfg
       - name: Godot project validation
         run: godot --headless --editor --path . --quit
-      - name: Export debug APK
+      - name: Export, align and sign debug APK
         shell: bash
         run: |
           set -euo pipefail
-          OUT="$GITHUB_WORKSPACE/game.apk"
-          ALIGNED="$GITHUB_WORKSPACE/game-aligned.apk"
-          SIGNED="$GITHUB_WORKSPACE/game-signed.apk"
-          rm -f "$OUT" "$ALIGNED" "$SIGNED"
-          rm -rf build
+          WORK="$RUNNER_TEMP/pakistan-apk"
+          OUT="$WORK/game.apk"
+          ALIGNED="$WORK/game-aligned.apk"
+          SIGNED="$WORK/game-signed.apk"
+          FINAL="$GITHUB_WORKSPACE/build/Street-Football-Pakistan-debug.apk"
+          rm -rf "$WORK"
+          mkdir -p "$WORK" "$GITHUB_WORKSPACE/build"
+          chmod -R u+rwX "$WORK" "$GITHUB_WORKSPACE/build" || true
+          rm -f "$FINAL"
           echo "Exporting Android APK to: $OUT"
           timeout 15m godot --headless --verbose --path "$GITHUB_WORKSPACE" --export-debug "Android" "$OUT"
           test -s "$OUT"
           file "$OUT"
           echo "Aligning APK..."
           "$ANDROID_HOME/build-tools/34.0.0/zipalign" -f -p 4 "$OUT" "$ALIGNED"
+          test -s "$ALIGNED"
           echo "Signing APK with Android debug keystore..."
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign --ks "$HOME/.android/debug.keystore" --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out "$SIGNED" "$ALIGNED"
           echo "Verifying APK signature..."
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$SIGNED"
           test -s "$SIGNED"
-          mkdir -p build
-          mv "$SIGNED" build/Street-Football-Pakistan-debug.apk
-          test -s build/Street-Football-Pakistan-debug.apk
-          file build/Street-Football-Pakistan-debug.apk
+          # Never move an aligned APK back into a Godot-created directory. Copy the
+          # final signed file from the runner temp area into a fresh workspace path.
+          rm -f "$FINAL"
+          install -m 0644 "$SIGNED" "$FINAL"
+          test -s "$FINAL"
+          file "$FINAL"
+          unzip -t "$FINAL" >/dev/null
+          echo "SIGNED APK READY: $FINAL"
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
