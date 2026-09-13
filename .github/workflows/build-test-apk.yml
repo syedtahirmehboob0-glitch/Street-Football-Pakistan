@@ -130,8 +130,6 @@ jobs:
           echo "Verifying APK signature..."
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$SIGNED"
           test -s "$SIGNED"
-          # Never move an aligned APK back into a Godot-created directory. Copy the
-          # final signed file from the runner temp area into a fresh workspace path.
           rm -f "$FINAL"
           install -m 0644 "$SIGNED" "$FINAL"
           test -s "$FINAL"
@@ -144,4 +142,4 @@ jobs:
           name: Street-Football-Pakistan-debug-apk
           path: build/Street-Football-Pakistan-debug.apk
 
-# Signed APK trigger.
+# Stability rebuild trigger: run a clean Android export after the latest runtime/build fixes.
