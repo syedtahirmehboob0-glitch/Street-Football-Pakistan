@@ -1,0 +1,3 @@
+New Android rebuild trigger for Street Football Pakistan.
+
+This commit intentionally triggers a fresh GitHub Actions APK build from main.
